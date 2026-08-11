@@ -1,0 +1,71 @@
+{
+  "_meta": {
+    "descricao": "Regras configuráveis de classificação zootécnica/comercial. A ordem importa: a primeira regra que casar define a categoria.",
+    "aviso": "Estimativa automática baseada em regras — não substitui laudo técnico ou tipificação de carcaça."
+  },
+  "categorias": [
+    {
+      "nome": "Bezerro",
+      "sexo": "macho",
+      "idade_max_meses": 12,
+      "condicao_reprodutiva": null
+    },
+    {
+      "nome": "Bezerra",
+      "sexo": "femea",
+      "idade_max_meses": 12,
+      "condicao_reprodutiva": null
+    },
+    {
+      "nome": "Garrote",
+      "sexo": "macho",
+      "idade_min_meses": 12,
+      "idade_max_meses": 24,
+      "condicao_reprodutiva": "inteiro"
+    },
+    {
+      "nome": "Novilha",
+      "sexo": "femea",
+      "idade_min_meses": 12,
+      "idade_max_meses": 24,
+      "condicao_reprodutiva": "vazia"
+    },
+    {
+      "nome": "Novilho",
+      "sexo": "macho",
+      "condicao_reprodutiva": "castrado",
+      "peso_arrobas_max": 18
+    },
+    {
+      "nome": "Touro",
+      "sexo": "macho",
+      "idade_min_meses": 24,
+      "condicao_reprodutiva": "inteiro"
+    },
+    {
+      "nome": "Boi gordo",
+      "sexo": "macho",
+      "peso_arrobas_min": 18,
+      "condicao_reprodutiva": ["castrado", "inteiro"]
+    },
+    {
+      "nome": "Boi",
+      "sexo": "macho",
+      "idade_min_meses": 24,
+      "condicao_reprodutiva": "castrado"
+    },
+    {
+      "nome": "Vaca gorda",
+      "sexo": "femea",
+      "condicao_reprodutiva": ["vazia", "com_cria_ao_pe"],
+      "peso_arrobas_min": 12,
+      "idade_min_meses": 36
+    },
+    {
+      "nome": "Vaca",
+      "sexo": "femea",
+      "idade_min_meses": 24,
+      "condicao_reprodutiva": ["prenha", "com_cria_ao_pe", "vazia"]
+    }
+  ]
+}

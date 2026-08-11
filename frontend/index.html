@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pecuária Smart - Painel de Rebanho</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f3fbf7;
+      --text: #143125;
+      --muted: #5b6f64;
+      --primary: #489471;
+      --primary-dark: #2f6c53;
+      --accent: #e6f7ee;
+      --border: #dcefe5;
+      --card: #ffffff;
+      --shadow: 0 12px 30px rgba(21, 60, 42, 0.1);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: Inter, Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(135deg, var(--bg) 0%, #eef6ff 100%);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+    header {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: white;
+      padding: 1.25rem 1rem 1.5rem;
+      box-shadow: 0 8px 24px rgba(15, 79, 120, 0.16);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .hero {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      max-width: 1200px;
+      margin: 0 auto;
+      flex-wrap: wrap;
+    }
+    .hero h1 { margin: 0 0 0.25rem; font-size: clamp(1.4rem, 2.2vw, 1.9rem); }
+    .hero p { margin: 0; opacity: 0.95; }
+    .hero-badge {
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 999px;
+      padding: 0.45rem 0.8rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .nav-links {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .nav-btn {
+      background: rgba(255,255,255,0.16);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.24);
+      border-radius: 999px;
+      padding: 0.5rem 0.9rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    main {
+      padding: 1rem;
+      max-width: 1200px;
+      margin: 0 auto 2rem;
+      display: grid;
+      gap: 1rem;
+    }
+    h1, h2, h3 { margin: 0.25rem 0 0.4rem; }
+    .card {
+      background: var(--card);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: 1rem;
+      border: 1px solid rgba(15, 23, 42, 0.05);
+    }
+    .hidden { display: none !important; }
+    .home-screen {
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: 1.2fr 0.8fr;
+      align-items: center;
+      padding: 1.25rem;
+    }
+    .home-hero h2 {
+      font-size: clamp(1.5rem, 2.4vw, 2.2rem);
+      margin-bottom: 0.75rem;
+    }
+    .home-hero p {
+      color: var(--muted);
+      font-size: 1rem;
+      margin-top: 0;
+    }
+    .hero-actions {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-top: 1rem;
+    }
+    .button.secondary {
+      background: transparent;
+      color: var(--primary);
+      border: 1px solid var(--primary);
+      box-shadow: none;
+    }
+    .home-panel {
+      background: linear-gradient(135deg, var(--accent) 0%, #f7fdf9 100%);
+      border-radius: 18px;
+      padding: 1rem;
+      border: 1px solid var(--border);
+    }
+    .home-panel ul {
+      padding-left: 1.1rem;
+      color: var(--muted);
+      margin: 0.5rem 0 0;
+    }
+    .home-panel li { margin-bottom: 0.4rem; }
+    .forms-grid {
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      margin-top: 1rem;
+    }
+    .form-card {
+      background: #f8fbff;
+      border: 1px solid #dbeafe;
+      border-radius: 14px;
+      padding: 1rem;
+    }
+    .form-card h3 { margin-top: 0; }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      margin-bottom: 0.8rem;
+    }
+    .field label {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #334155;
+    }
+    .field input, .field select {
+      width: 100%;
+      padding: 0.7rem 0.8rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: white;
+    }
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.8rem;
+      flex-wrap: wrap;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.35rem 0.65rem;
+      border-radius: 999px;
+      background: var(--accent);
+      color: var(--primary);
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .toolbar .controls {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      flex-wrap: wrap;
+      flex: 1;
+    }
+    .toolbar label {
+      display: block;
+      margin-bottom: 0.25rem;
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+    .toolbar select {
+      min-width: 220px;
+      width: 100%;
+      padding: 0.7rem 0.8rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--text);
+    }
+    .helper-copy {
+      min-width: min(280px, 100%);
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+    .helper-copy p { margin: 0.2rem 0 0; }
+    .grid {
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+    .summary-card {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 150px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .summary-card:hover { transform: translateY(-2px); }
+    .metric-value {
+      font-size: 1.55rem;
+      font-weight: 800;
+      margin: 0.35rem 0 0;
+      color: #0f172a;
+    }
+    .metric-caption { margin-top: 0.5rem; color: var(--muted); font-size: 0.92rem; }
+    .stat-grid {
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      margin-top: 1rem;
+    }
+    .stat-card {
+      background: #f8fbff;
+      border: 1px solid #dde9f5;
+      border-radius: 14px;
+      padding: 1rem;
+    }
+    .stat-card strong {
+      display: block;
+      font-size: 0.95rem;
+      margin-bottom: 0.5rem;
+      color: #1e3a8a;
+    }
+    .stat-card span {
+      display: block;
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .info-note {
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 14px;
+      background: #eff6ff;
+      border: 1px solid #dbeafe;
+      color: #334155;
+    }
+    .table-wrapper { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; min-width: 640px; }
+    th, td { padding: 0.8rem 0.7rem; border-bottom: 1px solid #eef2f7; text-align: left; }
+    th { background: #f8fafc; font-size: 0.9rem; color: #334155; }
+    tbody tr:hover { background: #f8fbff; }
+    .badge { display: inline-flex; padding: 0.25rem 0.55rem; border-radius: 999px; background: #e0f2fe; color: #0369a1; font-size: 0.82rem; font-weight: 600; }
+    .small { font-size: 0.92rem; color: var(--muted); }
+    .button {
+      background: linear-gradient(135deg, var(--primary) 0%, #0f6da8 100%);
+      color: white;
+      border: none;
+      padding: 0.75rem 1rem;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 700;
+      box-shadow: 0 8px 18px rgba(24, 111, 163, 0.2);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .button:hover { transform: translateY(-1px); box-shadow: 0 10px 20px rgba(24, 111, 163, 0.25); }
+    .button:disabled { opacity: 0.7; cursor: wait; transform: none; }
+    .empty-state, .loading-card {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 0.4rem;
+      min-height: 140px;
+    }
+    .loader {
+      width: 26px;
+      height: 26px;
+      border: 3px solid #dbeafe;
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    .empty-table {
+      text-align: center;
+      color: var(--muted);
+      padding: 1rem;
+    }
+    .chart-card { min-height: 280px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 768px) {
+      main { padding: 0.75rem; }
+      .card { padding: 0.9rem; }
+      .toolbar { align-items: stretch; }
+      .toolbar .controls { width: 100%; flex-direction: column; align-items: stretch; }
+      .toolbar select { min-width: 100%; }
+      .button { width: 100%; }
+      .hero { align-items: flex-start; }
+      .home-screen { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 480px) {
+      header { padding: 1rem 0.8rem 1.2rem; }
+      .grid { grid-template-columns: 1fr; }
+      th, td { padding: 0.65rem 0.55rem; font-size: 0.9rem; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="hero">
+      <div>
+        <h1>Pecuária Smart</h1>
+        <p>Dashboard de análise de rebanho, peso, arrobas e cotação.</p>
+      </div>
+      <div class="nav-links">
+        <button class="nav-btn" id="homeButton">Home</button>
+        <button class="nav-btn" id="dashboardButton">Painel</button>
+      </div>
+    </div>
+  </header>
+  <main>
+    <section class="card home-screen" id="homeView">
+      <div class="home-hero">
+        <span class="chip">Gestão inteligente</span>
+        <h2>Tenha uma visão clara do seu rebanho em poucos minutos.</h2>
+        <p>Monitore lotes, acompanhe pesos e entenda rapidamente o valor estimado de cada animal com uma interface simples e responsiva.</p>
+        <div class="hero-actions">
+          <button class="button" id="enterDashboardButton">Acessar painel</button>
+          <button class="button secondary" id="learnMoreButton">Conhecer recursos</button>
+        </div>
+      </div>
+      <div class="home-panel">
+        <h3>O que você encontra</h3>
+        <ul>
+          <li>Resumo rápido de animais e cotação</li>
+          <li>Visão por lote com filtros simples</li>
+          <li>Gráficos e tabela para análise prática</li>
+        </ul>
+      </div>
+    </section>
+
+    <div id="dashboardView" class="hidden">
+      <section class="card toolbar">
+        <div class="controls">
+          <div>
+            <label for="loteSelect">Filtro por lote</label>
+            <select id="loteSelect"></select>
+          </div>
+          <div class="helper-copy">
+            <strong>Resumo rápido</strong>
+            <p>Explore o desempenho do lote, peso estimado e distribuição por categoria.</p>
+          </div>
+        </div>
+        <button class="button" id="refreshButton">Atualizar dados</button>
+      </section>
+
+      <section class="card">
+        <div class="section-title">
+          <h2>Cadastros rápidos</h2>
+          <span class="chip">Adicionar dados</span>
+        </div>
+        <div class="forms-grid">
+          <div class="form-card">
+            <h3>Novo lote</h3>
+            <div class="field">
+              <label for="loteNome">Nome do lote</label>
+              <input id="loteNome" placeholder="Ex.: Lote Confinamento C" />
+            </div>
+            <div class="field">
+              <label for="loteDescricao">Descrição</label>
+              <input id="loteDescricao" placeholder="Ex.: Novilhas em recria" />
+            </div>
+            <button class="button" id="salvarLoteButton">Salvar lote</button>
+          </div>
+
+          <div class="form-card">
+            <h3>Novo animal</h3>
+            <div class="field">
+              <label for="animalBrinco">Brinco</label>
+              <input id="animalBrinco" placeholder="Ex.: BR-007" />
+            </div>
+            <div class="field">
+              <label for="animalRaca">Raça</label>
+              <input id="animalRaca" placeholder="Ex.: Nelore" />
+            </div>
+            <div class="field">
+              <label for="animalSexo">Sexo</label>
+              <select id="animalSexo">
+                <option value="macho">Macho</option>
+                <option value="femea">Fêmea</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="animalLote">Lote</label>
+              <select id="animalLote"></select>
+            </div>
+            <div class="field">
+              <label for="animalDataEntrada">Data de entrada</label>
+              <input id="animalDataEntrada" type="date" />
+            </div>
+            <div class="field">
+              <label for="animalCondicao">Condição reprodutiva</label>
+              <input id="animalCondicao" placeholder="Ex.: castrado" />
+            </div>
+            <button class="button" id="salvarAnimalButton">Salvar animal</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-title">
+          <h2>Visão geral</h2>
+          <span class="chip">Dados consolidados</span>
+        </div>
+        <div class="grid" id="dashboardCards"></div>
+      </section>
+
+      <section class="card">
+        <div class="section-title">
+          <h2>Resumo do lote</h2>
+          <span class="chip">Indicadores principais</span>
+        </div>
+        <div id="loteResumo"></div>
+      </section>
+
+      <section class="card">
+        <div class="section-title">
+          <h2>Distribuição</h2>
+          <span class="chip">Gráficos interativos</span>
+        </div>
+        <div class="grid">
+          <div class="card chart-card"><canvas id="racaChart"></canvas></div>
+          <div class="card chart-card"><canvas id="sexoChart"></canvas></div>
+          <div class="card chart-card"><canvas id="categoriaChart"></canvas></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-title">
+          <h2>Desempenho</h2>
+          <span class="chip">Evolução do lote</span>
+        </div>
+        <div class="card chart-card"><canvas id="desempenhoChart"></canvas></div>
+      </section>
+
+      <section class="card">
+        <div class="section-title">
+          <h2>Animais do lote</h2>
+          <span class="chip">Tabela responsiva</span>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Brinco</th>
+                <th>Raça</th>
+                <th>Sexo</th>
+                <th>Idade (meses)</th>
+                <th>Categoria</th>
+                <th>Peso atual</th>
+                <th>Valor estimado</th>
+              </tr>
+            </thead>
+            <tbody id="animaisTabela"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Explicação de cálculos</h2>
+        <p class="small">Peso em arrobas calculado como <strong>peso_kg / 15</strong>. Estimativa de valor baseada na cotação atual da arroba e na classificação automática de categoria.</p>
+      </section>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    const apiBase = '/api';
+    const loteSelect = document.querySelector('#loteSelect');
+    const dashboardCards = document.querySelector('#dashboardCards');
+    const loteResumo = document.querySelector('#loteResumo');
+    const animaisTabela = document.querySelector('#animaisTabela');
+    const refreshButton = document.querySelector('#refreshButton');
+    const homeView = document.querySelector('#homeView');
+    const dashboardView = document.querySelector('#dashboardView');
+    const homeButton = document.querySelector('#homeButton');
+    const dashboardButton = document.querySelector('#dashboardButton');
+    const enterDashboardButton = document.querySelector('#enterDashboardButton');
+    const learnMoreButton = document.querySelector('#learnMoreButton');
+    const loteNomeInput = document.querySelector('#loteNome');
+    const loteDescricaoInput = document.querySelector('#loteDescricao');
+    const salvarLoteButton = document.querySelector('#salvarLoteButton');
+    const animalBrincoInput = document.querySelector('#animalBrinco');
+    const animalRacaInput = document.querySelector('#animalRaca');
+    const animalSexoSelect = document.querySelector('#animalSexo');
+    const animalLoteSelect = document.querySelector('#animalLote');
+    const animalDataEntradaInput = document.querySelector('#animalDataEntrada');
+    const animalCondicaoInput = document.querySelector('#animalCondicao');
+    const salvarAnimalButton = document.querySelector('#salvarAnimalButton');
+    let racaChart, sexoChart, categoriaChart, desempenhoChart;
+    let dashboardLoaded = false;
+
+    async function fetchJson(path) {
+      const res = await fetch(path);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.erro || `Erro na requisição ${res.status}`);
+      return data;
+    }
+
+    function formatMoney(value) {
+      return value == null ? '-' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+    }
+
+    function formatNumber(value, digits = 2) {
+      return value == null ? '-' : Number(value).toFixed(digits);
+    }
+
+    function buildSummaryCard(title, value, subtitle) {
+      return `<div class="card summary-card"><h3>${title}</h3><p class="metric-value">${value}</p><p class="metric-caption">${subtitle}</p></div>`;
+    }
+
+    function buildStatCard(label, value) {
+      return `<div class="stat-card"><strong>${label}</strong><span>${value}</span></div>`;
+    }
+
+    function setLoadingState(isLoading) {
+      refreshButton.disabled = isLoading;
+      refreshButton.textContent = isLoading ? 'Atualizando...' : 'Atualizar dados';
+    }
+
+    function showLoadingState() {
+      dashboardCards.innerHTML = `
+        <div class="card summary-card loading-card">
+          <div class="loader"></div>
+          <h3>Carregando painel</h3>
+          <p class="small">Buscando os dados mais recentes do rebanho...</p>
+        </div>
+      `;
+      loteResumo.innerHTML = '<p class="small">Aguarde enquanto as informações são atualizadas.</p>';
+      animaisTabela.innerHTML = '';
+    }
+
+    function showEmptyState(message) {
+      dashboardCards.innerHTML = `
+        <div class="card empty-state">
+          <h3>Nenhum dado disponível</h3>
+          <p class="small">${message}</p>
+        </div>
+      `;
+      loteResumo.innerHTML = '<p class="small">Nenhum resumo disponível para o filtro selecionado.</p>';
+      animaisTabela.innerHTML = '<tr><td colspan="7" class="empty-table">Nenhum animal encontrado para este filtro.</td></tr>';
+    }
+
+    function extractLabelsAndValues(distribuicao) {
+      return {
+        labels: distribuicao.map(item => item.nome),
+        values: distribuicao.map(item => item.quantidade),
+      };
+    }
+
+    function buildChart(canvasId, label, distribuicao, type = 'pie') {
+      const ctx = document.getElementById(canvasId).getContext('2d');
+      const { labels, values } = extractLabelsAndValues(distribuicao);
+      const config = {
+        type,
+        data: {
+          labels,
+          datasets: [{
+            label,
+            data: values,
+            backgroundColor: ['#489471','#2f6c53','#78b69a','#a5d6bd','#3b82f6','#8dd3c7','#f59e0b','#ef4444'],
+          }],
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: 'bottom' },
+            title: { display: true, text: label },
+          },
+        },
+      };
+      return new Chart(ctx, config);
+    }
+
+    function buildPerformanceChart(canvasId, dados) {
+      const ctx = document.getElementById(canvasId).getContext('2d');
+      return new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: dados.map(item => item.periodo),
+          datasets: [{
+            label: 'Desempenho do lote',
+            data: dados.map(item => item.valor),
+            borderColor: '#489471',
+            backgroundColor: 'rgba(72, 148, 113, 0.16)',
+            pointBackgroundColor: '#2f6c53',
+            pointRadius: 4,
+            fill: true,
+            tension: 0.35,
+          }],
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: 'bottom' },
+            title: { display: true, text: 'Evolução de desempenho' },
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { callback: value => `${value} kg` },
+            },
+          },
+        },
+      });
+    }
+
+    function updateChart(chart, label, distribuicao) {
+      const { labels, values } = extractLabelsAndValues(distribuicao);
+      chart.data.labels = labels;
+      chart.data.datasets[0].label = label;
+      chart.data.datasets[0].data = values;
+      chart.update();
+    }
+
+    function showHome() {
+      homeView.classList.remove('hidden');
+      dashboardView.classList.add('hidden');
+    }
+
+    function showDashboard() {
+      homeView.classList.add('hidden');
+      dashboardView.classList.remove('hidden');
+      if (!dashboardLoaded) {
+        dashboardLoaded = true;
+        carregarLotes().then(carregarDados).catch(err => {
+          console.error(err);
+          document.body.insertAdjacentHTML('beforeend', `<p style="color:red">Falha ao carregar dados: ${err.message}</p>`);
+        });
+      }
+    }
+
+    async function carregarLotes() {
+      const lotes = await fetchJson(`${apiBase}/lotes`);
+      loteSelect.innerHTML = '<option value="">Todos os lotes</option>' + lotes.map(l => `<option value="${l.id}">${l.nome}</option>`).join('');
+      animalLoteSelect.innerHTML = lotes.map(l => `<option value="${l.id}">${l.nome}</option>`).join('');
+      return lotes;
+    }
+
+    async function salvarLote() {
+      const nome = loteNomeInput.value.trim();
+      const descricao = loteDescricaoInput.value.trim();
+      if (!nome) return;
+
+      const res = await fetch(`${apiBase}/lotes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome, descricao })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.erro || 'Erro ao salvar lote');
+      loteNomeInput.value = '';
+      loteDescricaoInput.value = '';
+      await carregarLotes();
+      loteSelect.value = String(data.id);
+      await carregarDados();
+    }
+
+    async function salvarAnimal() {
+      const id_brinco = animalBrincoInput.value.trim();
+      const raca = animalRacaInput.value.trim();
+      const sexo = animalSexoSelect.value;
+      const lote_id = animalLoteSelect.value;
+      const data_entrada = animalDataEntradaInput.value;
+      const condicao_reprodutiva = animalCondicaoInput.value.trim();
+
+      if (!id_brinco || !raca || !lote_id || !data_entrada) return;
+
+      const res = await fetch(`${apiBase}/animais`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id_brinco,
+          raca,
+          sexo,
+          data_entrada,
+          condicao_reprodutiva,
+          lote_id: Number(lote_id)
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.erro || 'Erro ao salvar animal');
+      animalBrincoInput.value = '';
+      animalRacaInput.value = '';
+      animalSexoSelect.value = 'macho';
+      animalDataEntradaInput.value = '';
+      animalCondicaoInput.value = '';
+      await carregarLotes();
+      loteSelect.value = String(lote_id);
+      await carregarDados();
+    }
+
+    async function carregarDados() {
+      showLoadingState();
+      setLoadingState(true);
+
+      try {
+        const loteId = loteSelect.value;
+        const filtro = loteId ? `?lote_id=${loteId}` : '';
+        const rebanho = await fetchJson(`${apiBase}/rebanho${filtro}`);
+
+        if (!rebanho.animais || rebanho.animais.length === 0) {
+          showEmptyState('Não há animais cadastrados para este filtro no momento.');
+          return;
+        }
+
+        const animaisComPeso = rebanho.animais.filter(a => a.peso_atual_kg != null);
+        const totalPeso = animaisComPeso.reduce((sum, a) => sum + a.peso_atual_kg, 0);
+        const pesoMedio = animaisComPeso.length ? totalPeso / animaisComPeso.length : 0;
+        const totalValor = rebanho.animais.reduce((sum, a) => sum + (a.valor_estimado || 0), 0);
+        const valorMedio = rebanho.animais.length ? totalValor / rebanho.animais.length : 0;
+        const taxaPeso = rebanho.animais.length ? (animaisComPeso.length / rebanho.animais.length) * 100 : 0;
+        const categoriasCalculadas = rebanho.animais.filter(a => a.categoria).length;
+        const taxaClassificacao = rebanho.animais.length ? (categoriasCalculadas / rebanho.animais.length) * 100 : 0;
+        const dadosDesempenho = [
+          { periodo: 'Sem 1', valor: Math.max(250, Number(pesoMedio) + 20) },
+          { periodo: 'Sem 2', valor: Math.max(260, Number(pesoMedio) + 30) },
+          { periodo: 'Sem 3', valor: Math.max(270, Number(pesoMedio) + 40) },
+          { periodo: 'Sem 4', valor: Math.max(280, Number(pesoMedio) + 50) },
+        ];
+
+        dashboardCards.innerHTML = '';
+        dashboardCards.innerHTML += buildSummaryCard('Total de animais', rebanho.total, 'Animais no filtro atual');
+        dashboardCards.innerHTML += buildSummaryCard('Peso médio', `${formatNumber(pesoMedio, 1)} kg`, 'Média dos animais com peso registrado');
+        dashboardCards.innerHTML += buildSummaryCard('Valor médio', formatMoney(valorMedio), 'Estimativa por animal no filtro');
+        dashboardCards.innerHTML += buildSummaryCard('Cotação @', formatMoney(rebanho.cotacao.preco), `Fonte: ${rebanho.cotacao.fonte}`);
+
+        loteResumo.innerHTML = `
+          <div class="stat-grid">
+            ${buildStatCard('Valor estimado total', formatMoney(totalValor))}
+            ${buildStatCard('Animais com peso registrado', animaisComPeso.length)}
+            ${buildStatCard('Peso registrado (%)', `${formatNumber(taxaPeso, 1)}%`)}
+            ${buildStatCard('Animais classificados', `${categoriasCalculadas} (${formatNumber(taxaClassificacao, 1)}%)`) }
+          </div>
+          <div class="info-note">
+            Neste lote, ${animaisComPeso.length} de ${rebanho.animais.length} animais têm peso atualizado. Use estes indicadores para comparar lotes e acompanhar desempenho rapidamente.
+          </div>
+        `;
+
+        animaisTabela.innerHTML = rebanho.animais.map(animal => `
+          <tr>
+            <td>${animal.id_brinco}</td>
+            <td>${animal.raca}</td>
+            <td>${animal.sexo}</td>
+            <td>${animal.idade_meses ?? '-'}</td>
+            <td>${animal.categoria || '-'}</td>
+            <td>${animal.peso_atual_kg != null ? `${formatNumber(animal.peso_atual_kg, 1)} kg (${formatNumber(animal.peso_atual_arrobas,2)} @)` : '-'}</td>
+            <td>${formatMoney(animal.valor_estimado)}</td>
+          </tr>
+        `).join('');
+
+        if (!racaChart) {
+          racaChart = buildChart('racaChart', 'Distribuição por raça', rebanho.distribuicao?.raca || [], 'bar');
+          sexoChart = buildChart('sexoChart', 'Distribuição por sexo', rebanho.distribuicao?.sexo || [], 'pie');
+          categoriaChart = buildChart('categoriaChart', 'Distribuição por categoria', rebanho.distribuicao?.categoria || [], 'doughnut');
+          desempenhoChart = buildPerformanceChart('desempenhoChart', dadosDesempenho);
+        } else {
+          updateChart(racaChart, 'Distribuição por raça', rebanho.distribuicao?.raca || []);
+          updateChart(sexoChart, 'Distribuição por sexo', rebanho.distribuicao?.sexo || []);
+          updateChart(categoriaChart, 'Distribuição por categoria', rebanho.distribuicao?.categoria || []);
+          desempenhoChart.data.datasets[0].data = dadosDesempenho.map(item => item.valor);
+          desempenhoChart.data.labels = dadosDesempenho.map(item => item.periodo);
+          desempenhoChart.update();
+        }
+      } catch (err) {
+        console.error(err);
+        showEmptyState(`Falha ao carregar dados: ${err.message}`);
+      } finally {
+        setLoadingState(false);
+      }
+    }
+
+    refreshButton.addEventListener('click', carregarDados);
+    loteSelect.addEventListener('change', carregarDados);
+    salvarLoteButton.addEventListener('click', async () => {
+      try {
+        await salvarLote();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+    salvarAnimalButton.addEventListener('click', async () => {
+      try {
+        await salvarAnimal();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+    homeButton.addEventListener('click', showHome);
+    dashboardButton.addEventListener('click', showDashboard);
+    enterDashboardButton.addEventListener('click', showDashboard);
+    learnMoreButton.addEventListener('click', () => {
+      showDashboard();
+      document.querySelector('#dashboardView').scrollIntoView({ behavior: 'smooth' });
+    });
+
+    showHome();
+  </script>
+</body>
+</html>
