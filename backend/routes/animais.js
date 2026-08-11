@@ -3,6 +3,14 @@ const router = express.Router();
 const { db } = require('../db/database');
 const herdService = require('../services/herdService');
 const { calcularIdadeMeses } = require('../services/calculationService');
+const {
+  ValidationError,
+  validateSexo,
+  validateCondicaoReprodutiva,
+  validateDateField,
+  validatePositiveInteger,
+  ensureRecordExists,
+} = require('../utils/validation');
 
 router.get('/', async (req, res) => {
   try {
@@ -27,7 +35,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/', (req, res) => {
+router.post('/', (req, res, next) => {
   try {
     const {
       id_brinco,
@@ -40,9 +48,18 @@ router.post('/', (req, res) => {
       lote_id,
     } = req.body;
 
-    if (!id_brinco || !raca || !sexo || !data_entrada || !lote_id) {
-      return res.status(400).json({ erro: 'Campos obrigatórios: id_brinco, raca, sexo, data_entrada, lote_id' });
+    if (!id_brinco || !raca) {
+      return res.status(400).json({ erro: 'id_brinco e raca são obrigatórios' });
     }
+
+    const sexoValidado = validateSexo(sexo);
+    const condicaoValidada = validateCondicaoReprodutiva(condicao_reprodutiva);
+    const dataEntradaValidada = validateDateField(data_entrada, 'data_entrada');
+    const loteIdValidado = validatePositiveInteger(lote_id, 'lote_id');
+    const dataNascimentoValidada = data_nascimento ? validateDateField(data_nascimento, 'data_nascimento') : null;
+    const idadeEstimadaValidada = idade_estimada_meses == null ? null : validatePositiveInteger(idade_estimada_meses, 'idade_estimada_meses');
+
+    ensureRecordExists(db, 'lote', loteIdValidado, 'lote_id');
 
     const result = db
       .prepare(`
@@ -52,12 +69,12 @@ router.post('/', (req, res) => {
       .run(
         id_brinco,
         raca,
-        sexo,
-        data_nascimento || null,
-        idade_estimada_meses || null,
-        condicao_reprodutiva || null,
-        data_entrada,
-        lote_id
+        sexoValidado,
+        dataNascimentoValidada,
+        idadeEstimadaValidada,
+        condicaoValidada,
+        dataEntradaValidada,
+        loteIdValidado
       );
 
     const animal = db.prepare('SELECT * FROM animal WHERE id = ?').get(result.lastInsertRowid);
@@ -69,13 +86,19 @@ router.post('/', (req, res) => {
     if (err.message.includes('UNIQUE')) {
       return res.status(409).json({ erro: 'Brinco já cadastrado' });
     }
-    res.status(500).json({ erro: err.message });
+    if (err instanceof ValidationError) {
+      return res.status(400).json({ erro: err.message });
+    }
+    if (err.message.includes('not found')) {
+      return res.status(404).json({ erro: err.message });
+    }
+    next(err);
   }
 });
 
-router.put('/:id', (req, res) => {
+router.put('/:id', (req, res, next) => {
   try {
-    const id = parseInt(req.params.id, 10);
+    const id = validatePositiveInteger(req.params.id, 'id');
     const existing = db.prepare('SELECT * FROM animal WHERE id = ?').get(id);
     if (!existing) return res.status(404).json({ erro: 'Animal não encontrado' });
 
@@ -90,6 +113,15 @@ router.put('/:id', (req, res) => {
       lote_id = existing.lote_id,
     } = req.body;
 
+    const sexoValidado = validateSexo(sexo);
+    const condicaoValidada = validateCondicaoReprodutiva(condicao_reprodutiva);
+    const dataEntradaValidada = validateDateField(data_entrada, 'data_entrada');
+    const loteIdValidado = validatePositiveInteger(lote_id, 'lote_id');
+    const dataNascimentoValidada = data_nascimento ? validateDateField(data_nascimento, 'data_nascimento') : null;
+    const idadeEstimadaValidada = idade_estimada_meses == null ? null : validatePositiveInteger(idade_estimada_meses, 'idade_estimada_meses');
+
+    ensureRecordExists(db, 'lote', loteIdValidado, 'lote_id');
+
     db.prepare(`
       UPDATE animal SET
         id_brinco = ?, raca = ?, sexo = ?, data_nascimento = ?,
@@ -97,8 +129,8 @@ router.put('/:id', (req, res) => {
         data_entrada = ?, lote_id = ?, updated_at = datetime('now')
       WHERE id = ?
     `).run(
-      id_brinco, raca, sexo, data_nascimento, idade_estimada_meses,
-      condicao_reprodutiva, data_entrada, lote_id, id
+      id_brinco, raca, sexoValidado, dataNascimentoValidada, idadeEstimadaValidada,
+      condicaoValidada, dataEntradaValidada, loteIdValidado, id
     );
 
     const animal = db.prepare('SELECT * FROM animal WHERE id = ?').get(id);
@@ -107,7 +139,13 @@ router.put('/:id', (req, res) => {
       idade_meses: calcularIdadeMeses(animal.data_nascimento, animal.idade_estimada_meses),
     });
   } catch (err) {
-    res.status(500).json({ erro: err.message });
+    if (err instanceof ValidationError) {
+      return res.status(400).json({ erro: err.message });
+    }
+    if (err.message.includes('not found')) {
+      return res.status(404).json({ erro: err.message });
+    }
+    next(err);
   }
 });
 

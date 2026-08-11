@@ -31,6 +31,11 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', modulo: 'analise-rebanho' });
 });
 
+app.use((err, req, res, next) => {
+  console.error('Erro não tratado:', err);
+  res.status(500).json({ erro: 'Erro interno do servidor' });
+});
+
 app.listen(PORT, () => {
   console.log(`Pecuária Smart rodando em http://localhost:${PORT}`);
 });

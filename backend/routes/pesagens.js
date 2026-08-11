@@ -2,21 +2,21 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../db/database');
 const { kgParaArrobas } = require('../services/calculationService');
+const { ValidationError, validatePesoKg, validateDateField, validatePositiveInteger, ensureRecordExists } = require('../utils/validation');
 
-router.post('/', (req, res) => {
+router.post('/', (req, res, next) => {
   try {
     const { animal_id, peso_kg, data_pesagem, origem } = req.body;
 
-    if (!animal_id || !peso_kg || peso_kg <= 0) {
-      return res.status(400).json({ erro: 'animal_id e peso_kg (> 0) são obrigatórios' });
-    }
+    const animalIdValidado = validatePositiveInteger(animal_id, 'animal_id');
+    const pesoValidado = validatePesoKg(peso_kg);
+    const dataPesagemValidada = validateDateField(data_pesagem || new Date().toISOString().split('T')[0], 'data_pesagem');
 
-    const animal = db.prepare('SELECT id FROM animal WHERE id = ?').get(animal_id);
-    if (!animal) return res.status(404).json({ erro: 'Animal não encontrado' });
+    ensureRecordExists(db, 'animal', animalIdValidado, 'animal_id');
 
     const result = db
       .prepare('INSERT INTO pesagem (animal_id, peso_kg, data_pesagem, origem) VALUES (?, ?, ?, ?)')
-      .run(animal_id, peso_kg, data_pesagem || new Date().toISOString(), origem || 'balanca');
+      .run(animalIdValidado, pesoValidado, dataPesagemValidada, origem || 'balanca');
 
     const pesagem = db.prepare('SELECT * FROM pesagem WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json({
@@ -24,7 +24,13 @@ router.post('/', (req, res) => {
       peso_arrobas: kgParaArrobas(pesagem.peso_kg),
     });
   } catch (err) {
-    res.status(500).json({ erro: err.message });
+    if (err instanceof ValidationError) {
+      return res.status(400).json({ erro: err.message });
+    }
+    if (err.message.includes('not found')) {
+      return res.status(404).json({ erro: err.message });
+    }
+    next(err);
   }
 });
 
