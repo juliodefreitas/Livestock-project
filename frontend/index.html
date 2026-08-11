@@ -425,6 +425,23 @@
             </div>
             <button class="button" id="salvarAnimalButton">Salvar animal</button>
           </div>
+
+          <div class="form-card">
+            <h3>Atribuir peso manualmente</h3>
+            <div class="field">
+              <label for="animalPesoSelect">Animal</label>
+              <select id="animalPesoSelect"></select>
+            </div>
+            <div class="field">
+              <label for="pesoManualKg">Peso (kg)</label>
+              <input id="pesoManualKg" type="number" min="0.1" step="0.1" placeholder="Ex.: 320" />
+            </div>
+            <div class="field">
+              <label for="dataPesoManual">Data da pesagem</label>
+              <input id="dataPesoManual" type="date" />
+            </div>
+            <button class="button" id="salvarPesoManualButton">Salvar peso</button>
+          </div>
         </div>
       </section>
 
@@ -518,6 +535,10 @@
     const animalDataEntradaInput = document.querySelector('#animalDataEntrada');
     const animalCondicaoInput = document.querySelector('#animalCondicao');
     const salvarAnimalButton = document.querySelector('#salvarAnimalButton');
+    const animalPesoSelect = document.querySelector('#animalPesoSelect');
+    const pesoManualKgInput = document.querySelector('#pesoManualKg');
+    const dataPesoManualInput = document.querySelector('#dataPesoManual');
+    const salvarPesoManualButton = document.querySelector('#salvarPesoManualButton');
     let racaChart, sexoChart, categoriaChart, desempenhoChart;
     let dashboardLoaded = false;
 
@@ -668,6 +689,16 @@
       return lotes;
     }
 
+    async function carregarAnimaisParaPeso() {
+      const filtro = loteSelect.value ? `?lote_id=${loteSelect.value}` : '';
+      const rebanho = await fetchJson(`${apiBase}/animais${filtro}`);
+      animalPesoSelect.innerHTML = (rebanho.animais || []).map(animal => `<option value="${animal.id}">${animal.id_brinco} (${animal.raca})</option>`).join('');
+      if (!animalPesoSelect.value && (rebanho.animais || []).length) {
+        animalPesoSelect.value = String(rebanho.animais[0].id);
+      }
+      return rebanho.animais || [];
+    }
+
     async function salvarLote() {
       const nome = loteNomeInput.value.trim();
       const descricao = loteDescricaoInput.value.trim();
@@ -721,6 +752,25 @@
       await carregarDados();
     }
 
+    async function salvarPesoManual() {
+      const animal_id = animalPesoSelect.value;
+      const peso_kg = pesoManualKgInput.value;
+      const data_pesagem = dataPesoManualInput.value;
+
+      if (!animal_id || !peso_kg || !data_pesagem) return;
+
+      const res = await fetch(`${apiBase}/pesagens`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ animal_id: Number(animal_id), peso_kg: Number(peso_kg), data_pesagem, origem: 'manual' })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.erro || 'Erro ao salvar peso manual');
+      pesoManualKgInput.value = '';
+      dataPesoManualInput.value = '';
+      await carregarDados();
+    }
+
     async function carregarDados() {
       showLoadingState();
       setLoadingState(true);
@@ -728,6 +778,7 @@
       try {
         const loteId = loteSelect.value;
         const filtro = loteId ? `?lote_id=${loteId}` : '';
+        await carregarAnimaisParaPeso();
         const rebanho = await fetchJson(`${apiBase}/rebanho${filtro}`);
 
         if (!rebanho.animais || rebanho.animais.length === 0) {
@@ -813,6 +864,13 @@
     salvarAnimalButton.addEventListener('click', async () => {
       try {
         await salvarAnimal();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+    salvarPesoManualButton.addEventListener('click', async () => {
+      try {
+        await salvarPesoManual();
       } catch (err) {
         alert(err.message);
       }
