@@ -306,6 +306,8 @@
       padding: 1rem;
     }
     .chart-card { min-height: 280px; }
+    .percent-summary { display: flex; flex-direction: column; gap: 0.8rem; }
+    .percent-summary .stat-card p { margin: 0.35rem 0 0; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
     @media (max-width: 768px) {
@@ -468,7 +470,7 @@
         </div>
         <div class="grid">
           <div class="card chart-card"><canvas id="racaChart"></canvas></div>
-          <div class="card chart-card"><canvas id="sexoChart"></canvas></div>
+          <div class="card chart-card"><div id="sexoPercentual" class="percent-summary"></div></div>
           <div class="card chart-card"><canvas id="categoriaChart"></canvas></div>
         </div>
       </section>
@@ -539,7 +541,7 @@
     const pesoManualKgInput = document.querySelector('#pesoManualKg');
     const dataPesoManualInput = document.querySelector('#dataPesoManual');
     const salvarPesoManualButton = document.querySelector('#salvarPesoManualButton');
-    let racaChart, sexoChart, categoriaChart, desempenhoChart;
+    let racaChart, categoriaChart, desempenhoChart;
     let dashboardLoaded = false;
 
     async function fetchJson(path) {
@@ -663,6 +665,29 @@
       chart.data.datasets[0].label = label;
       chart.data.datasets[0].data = values;
       chart.update();
+    }
+
+    function renderSexoPercentual(distribuicao) {
+      const container = document.querySelector('#sexoPercentual');
+      const total = distribuicao.reduce((sum, item) => sum + Number(item.quantidade || 0), 0);
+
+      if (!total) {
+        container.innerHTML = '<p class="small">Nenhum dado de sexo disponível.</p>';
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="section-title">
+          <h3>Distribuição por sexo</h3>
+          <span class="chip">Percentual</span>
+        </div>
+        <div class="stat-grid">
+          ${distribuicao.map(item => {
+            const percent = total ? (Number(item.quantidade || 0) / total) * 100 : 0;
+            return `<div class="stat-card"><strong>${item.nome}</strong><span>${formatNumber(percent, 1)}%</span><p class="small">${item.quantidade} animais</p></div>`;
+          }).join('')}
+        </div>
+      `;
     }
 
     function showHome() {
@@ -831,14 +856,14 @@
           </tr>
         `).join('');
 
+        renderSexoPercentual(rebanho.distribuicao?.sexo || []);
+
         if (!racaChart) {
           racaChart = buildChart('racaChart', 'Distribuição por raça', rebanho.distribuicao?.raca || [], 'bar');
-          sexoChart = buildChart('sexoChart', 'Distribuição por sexo', rebanho.distribuicao?.sexo || [], 'pie');
           categoriaChart = buildChart('categoriaChart', 'Distribuição por categoria', rebanho.distribuicao?.categoria || [], 'doughnut');
           desempenhoChart = buildPerformanceChart('desempenhoChart', dadosDesempenho);
         } else {
           updateChart(racaChart, 'Distribuição por raça', rebanho.distribuicao?.raca || []);
-          updateChart(sexoChart, 'Distribuição por sexo', rebanho.distribuicao?.sexo || []);
           updateChart(categoriaChart, 'Distribuição por categoria', rebanho.distribuicao?.categoria || []);
           desempenhoChart.data.datasets[0].data = dadosDesempenho.map(item => item.valor);
           desempenhoChart.data.labels = dadosDesempenho.map(item => item.periodo);
