@@ -414,6 +414,10 @@
               </select>
             </div>
             <div class="field">
+              <label for="animalDataNascimento">Data de nascimento</label>
+              <input id="animalDataNascimento" type="date" />
+            </div>
+            <div class="field">
               <label for="animalLote">Lote</label>
               <select id="animalLote"></select>
             </div>
@@ -540,6 +544,7 @@
     const animalBrincoInput = document.querySelector('#animalBrinco');
     const animalRacaInput = document.querySelector('#animalRaca');
     const animalSexoSelect = document.querySelector('#animalSexo');
+    const animalDataNascimentoInput = document.querySelector('#animalDataNascimento');
     const animalLoteSelect = document.querySelector('#animalLote');
     const animalDataEntradaInput = document.querySelector('#animalDataEntrada');
     const animalCondicaoInput = document.querySelector('#animalCondicao');
@@ -774,6 +779,7 @@
       const id_brinco = animalBrincoInput.value.trim();
       const raca = animalRacaInput.value.trim();
       const sexo = animalSexoSelect.value;
+      const data_nascimento = animalDataNascimentoInput.value;
       const lote_id = animalLoteSelect.value;
       const data_entrada = animalDataEntradaInput.value;
       const condicao_reprodutiva = animalCondicaoInput.value.trim();
@@ -787,6 +793,7 @@
           id_brinco,
           raca,
           sexo,
+          data_nascimento,
           data_entrada,
           condicao_reprodutiva,
           lote_id: Number(lote_id)
@@ -797,6 +804,7 @@
       animalBrincoInput.value = '';
       animalRacaInput.value = '';
       animalSexoSelect.value = 'macho';
+      animalDataNascimentoInput.value = '';
       animalDataEntradaInput.value = '';
       animalCondicaoInput.value = '';
       await carregarLotes();
