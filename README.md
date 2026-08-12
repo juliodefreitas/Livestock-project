@@ -65,6 +65,18 @@ npm install
 npm run start
 ```
 
+Na primeira execução, popu o banco com dados de exemplo:
+
+```bash
+npm run seed
+```
+
+Ou use a flag `--seed` diretamente:
+
+```bash
+node backend/server.js --seed
+```
+
 O frontend está em `frontend/index.html` e é servido diretamente pelo servidor Express.
 
 ## Observações

@@ -9,6 +9,7 @@ const {
   validateCondicaoReprodutiva,
   validateDateField,
   validatePositiveInteger,
+  validateIdadeOuNascimento,
   ensureRecordExists,
 } = require('../utils/validation');
 
@@ -58,6 +59,7 @@ router.post('/', (req, res, next) => {
     const loteIdValidado = validatePositiveInteger(lote_id, 'lote_id');
     const dataNascimentoValidada = data_nascimento ? validateDateField(data_nascimento, 'data_nascimento') : null;
     const idadeEstimadaValidada = idade_estimada_meses == null ? null : validatePositiveInteger(idade_estimada_meses, 'idade_estimada_meses');
+    validateIdadeOuNascimento(dataNascimentoValidada, idadeEstimadaValidada);
 
     ensureRecordExists(db, 'lote', loteIdValidado, 'lote_id');
 
@@ -119,6 +121,7 @@ router.put('/:id', (req, res, next) => {
     const loteIdValidado = validatePositiveInteger(lote_id, 'lote_id');
     const dataNascimentoValidada = data_nascimento ? validateDateField(data_nascimento, 'data_nascimento') : null;
     const idadeEstimadaValidada = idade_estimada_meses == null ? null : validatePositiveInteger(idade_estimada_meses, 'idade_estimada_meses');
+    validateIdadeOuNascimento(dataNascimentoValidada, idadeEstimadaValidada);
 
     ensureRecordExists(db, 'lote', loteIdValidado, 'lote_id');
 

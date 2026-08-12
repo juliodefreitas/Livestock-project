@@ -423,7 +423,14 @@
             </div>
             <div class="field">
               <label for="animalCondicao">Condição reprodutiva</label>
-              <input id="animalCondicao" placeholder="Ex.: castrado" />
+              <select id="animalCondicao">
+                <option value="">Selecione...</option>
+                <option value="inteiro">Inteiro</option>
+                <option value="castrado">Castrado</option>
+                <option value="vazia">Vazia</option>
+                <option value="prenha">Prenha</option>
+                <option value="com_cria_ao_pe">Com cria ao pé</option>
+              </select>
             </div>
             <button class="button" id="salvarAnimalButton">Salvar animal</button>
           </div>
@@ -549,6 +556,26 @@
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.erro || `Erro na requisição ${res.status}`);
       return data;
+    }
+
+    async function fetchPesagensLote(loteId) {
+      if (!loteId) return [];
+      const data = await fetchJson(`${apiBase}/pesagens/lote/${loteId}`);
+      return data || [];
+    }
+
+    function agruparPesagensPorPeriodo(pesagens) {
+      const map = {};
+      for (const p of pesagens) {
+        const data = new Date(p.data_pesagem);
+        const periodo = `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}`;
+        if (!map[periodo]) map[periodo] = { soma: 0, count: 0 };
+        map[periodo].soma += Number(p.peso_kg);
+        map[periodo].count += 1;
+      }
+      return Object.entries(map)
+        .map(([periodo, dados]) => ({ periodo, valor: Math.round((dados.soma / dados.count) * 100) / 100 }))
+        .sort((a, b) => a.periodo.localeCompare(b.periodo));
     }
 
     function formatMoney(value) {
@@ -819,12 +846,11 @@
         const taxaPeso = rebanho.animais.length ? (animaisComPeso.length / rebanho.animais.length) * 100 : 0;
         const categoriasCalculadas = rebanho.animais.filter(a => a.categoria).length;
         const taxaClassificacao = rebanho.animais.length ? (categoriasCalculadas / rebanho.animais.length) * 100 : 0;
-        const dadosDesempenho = [
-          { periodo: 'Sem 1', valor: Math.max(250, Number(pesoMedio) + 20) },
-          { periodo: 'Sem 2', valor: Math.max(260, Number(pesoMedio) + 30) },
-          { periodo: 'Sem 3', valor: Math.max(270, Number(pesoMedio) + 40) },
-          { periodo: 'Sem 4', valor: Math.max(280, Number(pesoMedio) + 50) },
-        ];
+        let dadosDesempenho = [];
+        if (loteId) {
+          const pesagensLote = await fetchPesagensLote(loteId);
+          dadosDesempenho = agruparPesagensPorPeriodo(pesagensLote);
+        }
 
         dashboardCards.innerHTML = '';
         dashboardCards.innerHTML += buildSummaryCard('Total de animais', rebanho.total, 'Animais no filtro atual');

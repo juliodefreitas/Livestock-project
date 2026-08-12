@@ -29,11 +29,4 @@ if (typeof db.transaction !== 'function') {
   };
 }
 
-if (typeof db.pragma !== 'function') {
-  db.pragma = (sql) => {
-    db.exec(sql);
-    return db;
-  };
-}
-
 module.exports = { db, DB_PATH };

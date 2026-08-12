@@ -15,20 +15,41 @@ function getPesagensAnimal(animalId) {
     .all(animalId);
 }
 
-async function enriquecerAnimalCompleto(animal) {
-  const cotacao = await priceService.getPrecoArroba();
-  const ultimaPesagem = getUltimaPesagem(animal.id);
-  const idadeMeses = calcularIdadeMeses(animal.data_nascimento, animal.idade_estimada_meses);
-  const pesoArrobas = kgParaArrobas(ultimaPesagem?.peso_kg);
+function getPesagensPorAnimalIds(animalIds) {
+  if (!animalIds.length) return {};
+  const placeholders = animalIds.map(() => '?').join(',');
+  const rows = db
+    .prepare(`SELECT * FROM pesagem WHERE animal_id IN (${placeholders}) ORDER BY animal_id ASC, data_pesagem ASC`)
+    .all(...animalIds);
 
-  const { categoria, estimativa, aviso } = classificarAnimal({
-    sexo: animal.sexo,
-    idadeMeses,
-    condicaoReprodutiva: animal.condicao_reprodutiva,
-    pesoArrobas,
-  });
+  const map = {};
+  for (const row of rows) {
+    if (!map[row.animal_id]) map[row.animal_id] = [];
+    map[row.animal_id].push(row);
+  }
+  return map;
+}
 
-  return enriquecerAnimal(animal, ultimaPesagem, cotacao.preco, categoria, { estimativa, aviso_classificacao: aviso });
+function getUltimasPesagensPorAnimalIds(animalIds) {
+  if (!animalIds.length) return {};
+  const placeholders = animalIds.map(() => '?').join(',');
+  const rows = db
+    .prepare(`
+      SELECT p.* FROM pesagem p
+      INNER JOIN (
+        SELECT animal_id, MAX(data_pesagem) AS max_data
+        FROM pesagem
+        WHERE animal_id IN (${placeholders})
+        GROUP BY animal_id
+      ) ult ON p.animal_id = ult.animal_id AND p.data_pesagem = ult.max_data
+    `)
+    .all(...animalIds);
+
+  const map = {};
+  for (const row of rows) {
+    map[row.animal_id] = row;
+  }
+  return map;
 }
 
 function distribuicao(campo, itens) {
@@ -62,10 +83,17 @@ async function getRebanho(filtros = {}) {
   sql += ' ORDER BY a.id_brinco';
 
   const animais = db.prepare(sql).all(...params);
-  const enriquecidos = [];
+  if (!animais.length) {
+    return { total: 0, cotacao, distribuicao: { raca: [], sexo: [], categoria: [] }, animais: [] };
+  }
 
-  for (const animal of animais) {
-    const ultimaPesagem = getUltimaPesagem(animal.id);
+  const animalIds = animais.map(a => a.id);
+  const ultimasPesagensMap = getUltimasPesagensPorAnimalIds(animalIds);
+  const todasPesagensMap = getPesagensPorAnimalIds(animalIds);
+
+  const enriquecidos = animais.map(animal => {
+    const ultimaPesagem = ultimasPesagensMap[animal.id] || null;
+    const pesagens = todasPesagensMap[animal.id] || [];
     const idadeMeses = calcularIdadeMeses(animal.data_nascimento, animal.idade_estimada_meses);
     const pesoArrobas = kgParaArrobas(ultimaPesagem?.peso_kg);
     const { categoria } = classificarAnimal({
@@ -75,10 +103,8 @@ async function getRebanho(filtros = {}) {
       pesoArrobas,
     });
 
-    enriquecidos.push(
-      enriquecerAnimal(animal, ultimaPesagem, cotacao.preco, categoria)
-    );
-  }
+    return enriquecerAnimal(animal, ultimaPesagem, cotacao.preco, categoria, { pesagens_count: pesagens.length });
+  });
 
   return {
     total: enriquecidos.length,
@@ -101,6 +127,26 @@ async function getLoteAgregado(loteId) {
     .prepare('SELECT * FROM animal WHERE lote_id = ? ORDER BY id_brinco')
     .all(loteId);
 
+  if (!animais.length) {
+    return {
+      lote,
+      cotacao,
+      resumo: {
+        total_animais: 0,
+        peso_medio_kg: null,
+        peso_medio_arrobas: null,
+        gmd_medio: null,
+        valor_estimado_total: 0,
+      },
+      distribuicao: { raca: [], sexo: [], categoria: [] },
+      animais: [],
+    };
+  }
+
+  const animalIds = animais.map(a => a.id);
+  const ultimasPesagensMap = getUltimasPesagensPorAnimalIds(animalIds);
+  const todasPesagensMap = getPesagensPorAnimalIds(animalIds);
+
   const enriquecidos = [];
   let somaPesoKg = 0;
   let somaPesoArrobas = 0;
@@ -109,8 +155,8 @@ async function getLoteAgregado(loteId) {
   const gmds = [];
 
   for (const animal of animais) {
-    const ultimaPesagem = getUltimaPesagem(animal.id);
-    const pesagens = getPesagensAnimal(animal.id);
+    const ultimaPesagem = ultimasPesagensMap[animal.id] || null;
+    const pesagens = todasPesagensMap[animal.id] || [];
     const idadeMeses = calcularIdadeMeses(animal.data_nascimento, animal.idade_estimada_meses);
     const pesoArrobas = kgParaArrobas(ultimaPesagem?.peso_kg);
     const { categoria } = classificarAnimal({

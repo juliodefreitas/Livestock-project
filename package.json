@@ -6,8 +6,8 @@
   "scripts": {
     "start": "node backend/server.js",
     "dev": "node --watch backend/server.js",
+    "seed": "node backend/server.js --seed",
     "migrate": "node backend/db/migrate.js",
-    "seed": "node backend/db/seed.js",
     "test": "node --test"
   },
   "keywords": ["pecuaria", "bovinos", "confinamento"],

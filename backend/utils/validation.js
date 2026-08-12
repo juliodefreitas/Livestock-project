@@ -64,6 +64,15 @@ function validatePositiveInteger(value, fieldName) {
   return Number(value);
 }
 
+function validateIdadeOuNascimento(dataNascimento, idadeEstimadaMeses) {
+  if (!dataNascimento && idadeEstimadaMeses == null) {
+    throw new ValidationError('Informe data_nascimento ou idade_estimada_meses');
+  }
+  if (dataNascimento && idadeEstimadaMeses != null) {
+    throw new ValidationError('Informe apenas um: data_nascimento ou idade_estimada_meses');
+  }
+}
+
 function ensureRecordExists(db, tableName, id, fieldName) {
   const record = db.prepare(`SELECT id FROM ${tableName} WHERE id = ?`).get(id);
   if (!record) {
@@ -81,5 +90,6 @@ module.exports = {
   validatePesoKg,
   validateDateField,
   validatePositiveInteger,
+  validateIdadeOuNascimento,
   ensureRecordExists,
 };

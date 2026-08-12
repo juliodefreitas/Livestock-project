@@ -63,5 +63,21 @@ router.get('/animal/:animalId', (req, res) => {
   }
 });
 
+router.get('/lote/:loteId', (req, res) => {
+  try {
+    const loteId = parseInt(req.params.loteId, 10);
+    const animais = db.prepare('SELECT id FROM animal WHERE lote_id = ?').all(loteId);
+    if (!animais.length) return res.json([]);
+
+    const placeholders = animais.map(() => '?').join(',');
+    const pesagens = db
+      .prepare(`SELECT p.*, a.id_brinco FROM pesagem p JOIN animal a ON a.id = p.animal_id WHERE p.animal_id IN (${placeholders}) ORDER BY p.data_pesagem ASC`)
+      .all(...animais.map(a => a.id));
+
+    res.json(pesagens.map((p) => ({ ...p, peso_arrobas: kgParaArrobas(p.peso_kg) })));
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
 module.exports = router;
-module.exports.normalizePesagemPayload = normalizePesagemPayload;

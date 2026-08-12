@@ -11,7 +11,12 @@ const cotacaoRouter = require('./routes/cotacao');
 const pesagensRouter = require('./routes/pesagens');
 
 runMigrations();
-seed();
+
+if (process.argv.includes('--seed')) {
+  seed();
+} else {
+  console.log('Seed não executado. Use "node backend/server.js --seed" para popular o banco com dados de exemplo.');
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
