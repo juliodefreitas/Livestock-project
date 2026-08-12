@@ -5,6 +5,17 @@ function kgParaArrobas(pesoKg) {
   return Math.round((pesoKg / ARROBA_KG) * 100) / 100;
 }
 
+function podeVenderMatadouro(sexo, pesoArrobas) {
+  if (!sexo || pesoArrobas == null) return null;
+  if (sexo === 'femea') {
+    return pesoArrobas >= 14;
+  }
+  if (sexo === 'macho') {
+    return pesoArrobas >= 16;
+  }
+  return null;
+}
+
 function calcularIdadeMeses(dataNascimento, idadeEstimadaMeses, dataReferencia = new Date()) {
   if (dataNascimento) {
     const nasc = new Date(dataNascimento);
@@ -48,6 +59,7 @@ function enriquecerAnimal(animal, ultimaPesagem, precoArroba, categoria, extras 
     idade_meses: idadeMeses,
     peso_atual_kg: pesoKg,
     peso_atual_arrobas: pesoArrobas,
+    pode_vender_matadouro: podeVenderMatadouro(animal.sexo, pesoArrobas),
     valor_estimado: calcularValorEstimado(pesoArrobas, precoArroba),
     categoria: categoria ?? null,
     ultima_pesagem: ultimaPesagem?.data_pesagem ?? null,
@@ -62,4 +74,5 @@ module.exports = {
   calcularValorEstimado,
   calcularGMD,
   enriquecerAnimal,
+  podeVenderMatadouro,
 };
