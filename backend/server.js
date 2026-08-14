@@ -9,6 +9,8 @@ const lotesRouter = require('./routes/lotes');
 const rebanhoRouter = require('./routes/rebanho');
 const cotacaoRouter = require('./routes/cotacao');
 const pesagensRouter = require('./routes/pesagens');
+const cameraRouter = require('./routes/camera');
+const pesagensCamera = require('./routes/pesagensCamera');
 
 runMigrations();
 
@@ -29,6 +31,8 @@ app.use('/api/lotes', lotesRouter);
 app.use('/api/rebanho', rebanhoRouter);
 app.use('/api/cotacao', cotacaoRouter);
 app.use('/api/pesagens', pesagensRouter);
+app.use('/api/camera', cameraRouter);
+app.use('/api/pesagens', pesagensCamera);
 
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
 
