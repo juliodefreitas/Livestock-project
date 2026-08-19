@@ -279,15 +279,15 @@ test('descrição do teste', () => {
 
 Endpoints preparados em `/api/camera/*`. Hardware opcional — sem câmera, endpoint retorna erro 503.
 
-Dependência: `node-webcam` ou `opencv4nodejs`
+A implementação real de captura de imagem está preparada como extensão futura (o serviço atual gera imagens dummy para testes).
 
 ### OCR (Tesseract)
 
-Identifica número do brinco em imagens. Requer `tesseract.js`.
+Identifica número do brinco em imagens. Requer `tesseract.js` (dependência opcional).
 
 ### Balança (Serial/USB)
 
-Conexão via `serialport`. Configurável via `.env` com porta e baud rate.
+Conexão via `serialport` (dependência opcional). Configurável via `.env` com porta e baud rate.
 
 ## Troubleshooting
 
