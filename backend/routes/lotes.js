@@ -2,27 +2,32 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../db/database');
 const herdService = require('../services/herdService');
+const { ValidationError, validatePositiveInteger } = require('../utils/validation');
 
-router.get('/', (req, res) => {
+router.get('/', (req, res, next) => {
   try {
     const lotes = db.prepare('SELECT * FROM lote ORDER BY nome').all();
     res.json(lotes);
   } catch (err) {
-    res.status(500).json({ erro: err.message });
+    next(err);
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req, res, next) => {
   try {
-    const agregado = await herdService.getLoteAgregado(parseInt(req.params.id, 10));
+    const id = validatePositiveInteger(req.params.id, 'id');
+    const agregado = await herdService.getLoteAgregado(id);
     if (!agregado) return res.status(404).json({ erro: 'Lote não encontrado' });
     res.json(agregado);
   } catch (err) {
-    res.status(500).json({ erro: err.message });
+    if (err instanceof ValidationError) {
+      return res.status(400).json({ erro: err.message });
+    }
+    next(err);
   }
 });
 
-router.post('/', (req, res) => {
+router.post('/', (req, res, next) => {
   try {
     const { nome, descricao } = req.body;
     if (!nome) return res.status(400).json({ erro: 'Nome do lote é obrigatório' });
@@ -34,7 +39,7 @@ router.post('/', (req, res) => {
     if (err.message.includes('UNIQUE')) {
       return res.status(409).json({ erro: 'Lote com este nome já existe' });
     }
-    res.status(500).json({ erro: err.message });
+    next(err);
   }
 });
 

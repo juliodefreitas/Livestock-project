@@ -3,12 +3,16 @@
   "version": "1.0.0",
   "description": "Sistema de identificação e monitoramento de bovinos confinados — Pecuária Smart",
   "main": "backend/server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "start": "node backend/server.js",
     "dev": "node --watch backend/server.js",
     "seed": "node backend/server.js --seed",
     "migrate": "node backend/db/migrate.js",
-    "test": "node --test"
+    "test": "node --test",
+    "audit": "npm audit --omit=dev --audit-level=high"
   },
   "keywords": ["pecuaria", "bovinos", "confinamento"],
   "license": "MIT",

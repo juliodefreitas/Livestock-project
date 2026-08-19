@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../db/database');
 const { kgParaArrobas } = require('../services/calculationService');
-const { ValidationError, validatePesoKg, validateDateField, validatePositiveInteger, ensureRecordExists } = require('../utils/validation');
+const { ValidationError, validatePesoKg, validateDateField, validatePositiveInteger, validateOrigemPesagem, ensureRecordExists } = require('../utils/validation');
 
 function normalizePesagemPayload(payload = {}) {
   const { animal_id, peso_kg, data_pesagem, origem } = payload;
@@ -11,7 +11,7 @@ function normalizePesagemPayload(payload = {}) {
     animal_id,
     peso_kg,
     data_pesagem: data_pesagem || new Date().toISOString().split('T')[0],
-    origem: origem === 'balanca' ? 'balanca' : 'manual',
+    origem: origem || 'manual',
   };
 }
 
@@ -23,12 +23,13 @@ router.post('/', (req, res, next) => {
     const animalIdValidado = validatePositiveInteger(animal_id, 'animal_id');
     const pesoValidado = validatePesoKg(peso_kg);
     const dataPesagemValidada = validateDateField(data_pesagem, 'data_pesagem');
+    const origemValidada = validateOrigemPesagem(origem);
 
     ensureRecordExists(db, 'animal', animalIdValidado, 'animal_id');
 
     const result = db
       .prepare('INSERT INTO pesagem (animal_id, peso_kg, data_pesagem, origem) VALUES (?, ?, ?, ?)')
-      .run(animalIdValidado, pesoValidado, dataPesagemValidada, origem);
+      .run(animalIdValidado, pesoValidado, dataPesagemValidada, origemValidada);
 
     const pesagem = db.prepare('SELECT * FROM pesagem WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json({
@@ -81,3 +82,4 @@ router.get('/lote/:loteId', (req, res) => {
 });
 
 module.exports = router;
+module.exports.normalizePesagemPayload = normalizePesagemPayload;

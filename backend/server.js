@@ -17,15 +17,30 @@ runMigrations();
 if (process.argv.includes('--seed')) {
   seed();
 } else {
-  console.log('Seed não executado. Use "node backend/server.js --seed" para popular o banco com dados de exemplo.');
+  console.log('Seed não executado. Use "npm run seed" para popular o banco com dados de exemplo.');
 }
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
-app.use(express.json());
+// Configurar CORS seguro
+const corsOptions = {
+  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  credentials: true
+};
 
+app.use(cors(corsOptions));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
+// Rate limiting simples (em memória)
+const rateLimit = require('./utils/rateLimit');
+app.use('/api/', rateLimit({
+  windowMs: 60 * 1000,
+  max: 100
+}));
+
+// Rotas da API
 app.use('/api/animais', animaisRouter);
 app.use('/api/lotes', lotesRouter);
 app.use('/api/rebanho', rebanhoRouter);
@@ -40,13 +55,23 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', modulo: 'analise-rebanho' });
 });
 
+// Middleware de erro
 app.use((err, req, res, next) => {
+  const statusCode = err.statusCode || 500;
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+
   console.error('Erro não tratado:', err);
-  res.status(500).json({ erro: 'Erro interno do servidor' });
+
+  res.status(statusCode).json({
+    erro: isDevelopment ? err.message : 'Erro interno do servidor',
+    ...(isDevelopment && { stack: err.stack })
+  });
 });
 
-app.listen(PORT, () => {
-  console.log(`Pecuária Smart rodando em http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Pecuária Smart rodando em http://localhost:${PORT}`);
+  });
+}
 
 module.exports = app;

@@ -17,12 +17,24 @@ const { db } = require('../db/database');
 const { getCameraService } = require('../services/cameraService');
 const { getBrincoOCRService } = require('../services/brincoOCRService');
 const { getScaleService } = require('../services/scaleService');
-const { kgParaArrobas } = require('./calculationService');
+const { kgParaArrobas } = require('../services/calculationService');
 const { ValidationError, validatePesoKg, validateDateField } = require('../utils/validation');
 
 const cameraService = getCameraService();
 const ocrService = getBrincoOCRService();
 const scaleService = getScaleService();
+
+function requireHardware() {
+  const cameraStatus = cameraService.getStatus();
+  const ocrStatus = ocrService.getStatus();
+  const scaleStatus = scaleService.getStatus();
+
+  if (!cameraStatus.isInitialized || !ocrStatus.isInitialized || !scaleStatus.isConnected) {
+    const error = new Error('Hardware não disponível. Configure câmera, OCR e balança antes de usar este endpoint.');
+    error.statusCode = 503;
+    throw error;
+  }
+}
 
 /**
  * POST /api/pesagens/camera
@@ -43,6 +55,8 @@ const scaleService = getScaleService();
  */
 router.post('/camera', async (req, res, next) => {
   try {
+    requireHardware();
+
     const {
       peso_kg,
       data_pesagem = new Date().toISOString().split('T')[0],
@@ -192,6 +206,7 @@ router.post('/camera', async (req, res, next) => {
  */
 router.post('/camera/validate', async (req, res, next) => {
   try {
+    requireHardware();
     console.log('[Pesagem Camera] Executando validação...');
 
     const results = {
@@ -280,9 +295,9 @@ router.post('/camera/validate', async (req, res, next) => {
 router.post('/camera/setup', async (req, res, next) => {
   try {
     const {
-      cameraDeviceId = 0,
-      scalePortName = 'COM3',
-      scaleBaudRate = 9600
+      cameraDeviceId = process.env.CAMERA_DEVICE_ID || 0,
+      scalePortName = process.env.SCALE_PORT || 'COM3',
+      scaleBaudRate = process.env.SCALE_BAUD_RATE || 9600
     } = req.body;
 
     console.log('[Pesagem Camera] Iniciando setup...');

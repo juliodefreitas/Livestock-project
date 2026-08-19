@@ -17,7 +17,7 @@ test('validateCondicaoReprodutiva aceita null e valores válidos', () => {
 test('validatePesoKg rejeita valores fora do limite', () => {
   assert.equal(validatePesoKg(450), 450);
   assert.throws(() => validatePesoKg(0), /positivo/i);
-  assert.throws(() => validatePesoKg(1300), /1200/i);
+  assert.throws(() => validatePesoKg(2100), /2000/i);
 });
 
 test('validateDateField aceita datas válidas e rejeita futuro/erro', () => {

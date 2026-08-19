@@ -1,6 +1,8 @@
 const VALID_SEXOS = new Set(['macho', 'femea']);
 const VALID_CONDICOES = new Set(['inteiro', 'castrado', 'vazia', 'prenha', 'com_cria_ao_pe']);
-const MAX_PESO_KG = 1200;
+const VALID_ORIGEM_PESAGEM = new Set(['manual', 'balanca', 'camera']);
+const MIN_PESO_KG = 50;
+const MAX_PESO_KG = 2000;
 
 class ValidationError extends Error {
   constructor(message) {
@@ -29,8 +31,8 @@ function validatePesoKg(value) {
   if (!Number.isFinite(numero) || numero <= 0) {
     throw new ValidationError('peso_kg deve ser um número positivo');
   }
-  if (numero > MAX_PESO_KG) {
-    throw new ValidationError('peso_kg excede o limite máximo de 1200 kg');
+  if (numero < MIN_PESO_KG || numero > MAX_PESO_KG) {
+    throw new ValidationError(`peso_kg deve estar entre ${MIN_PESO_KG} e ${MAX_PESO_KG} kg`);
   }
   return numero;
 }
@@ -73,16 +75,24 @@ function validateIdadeOuNascimento(dataNascimento, idadeEstimadaMeses) {
   }
 }
 
+function validateOrigemPesagem(value) {
+  if (typeof value !== 'string' || !VALID_ORIGEM_PESAGEM.has(value)) {
+    throw new ValidationError('origem deve ser "manual", "balanca" ou "camera"');
+  }
+  return value;
+}
+
 function ensureRecordExists(db, tableName, id, fieldName) {
   const record = db.prepare(`SELECT id FROM ${tableName} WHERE id = ?`).get(id);
   if (!record) {
-    throw new Error(`${fieldName} não encontrado`);
+    throw new Error(`${fieldName} not found`);
   }
+  return record;
 }
 
 module.exports = {
-  VALID_SEXOS,
-  VALID_CONDICOES,
+  VALID_ORIGEM_PESAGEM,
+  MIN_PESO_KG,
   MAX_PESO_KG,
   ValidationError,
   validateSexo,
@@ -91,5 +101,6 @@ module.exports = {
   validateDateField,
   validatePositiveInteger,
   validateIdadeOuNascimento,
+  validateOrigemPesagem,
   ensureRecordExists,
 };

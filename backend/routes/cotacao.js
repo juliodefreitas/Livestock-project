@@ -4,12 +4,12 @@ const priceService = require('../services/priceService');
 const { getRulesMetadata } = require('../services/classificationService');
 const { ValidationError, validateDateField } = require('../utils/validation');
 
-router.get('/arroba', async (req, res) => {
+router.get('/arroba', async (req, res, next) => {
   try {
     const cotacao = await priceService.getPrecoArroba();
     res.json(cotacao);
   } catch (err) {
-    res.status(500).json({ erro: err.message });
+    next(err);
   }
 });
 
@@ -32,11 +32,11 @@ router.post('/arroba', (req, res, next) => {
   }
 });
 
-router.get('/classificacao', (req, res) => {
+router.get('/classificacao', (req, res, next) => {
   try {
     res.json(getRulesMetadata());
   } catch (err) {
-    res.status(500).json({ erro: err.message });
+    next(err);
   }
 });
 

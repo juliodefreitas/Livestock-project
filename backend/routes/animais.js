@@ -13,7 +13,7 @@ const {
   ensureRecordExists,
 } = require('../utils/validation');
 
-router.get('/', async (req, res) => {
+router.get('/', async (req, res, next) => {
   try {
     const filtros = {
       lote_id: req.query.lote_id ? parseInt(req.query.lote_id, 10) : undefined,
@@ -22,17 +22,21 @@ router.get('/', async (req, res) => {
     const data = await herdService.getRebanho(filtros);
     res.json(data);
   } catch (err) {
-    res.status(500).json({ erro: err.message });
+    next(err);
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req, res, next) => {
   try {
-    const ficha = await herdService.getAnimalFicha(parseInt(req.params.id, 10));
+    const id = validatePositiveInteger(req.params.id, 'id');
+    const ficha = await herdService.getAnimalFicha(id);
     if (!ficha) return res.status(404).json({ erro: 'Animal não encontrado' });
     res.json(ficha);
   } catch (err) {
-    res.status(500).json({ erro: err.message });
+    if (err instanceof ValidationError) {
+      return res.status(400).json({ erro: err.message });
+    }
+    next(err);
   }
 });
 
@@ -142,6 +146,9 @@ router.put('/:id', (req, res, next) => {
       idade_meses: calcularIdadeMeses(animal.data_nascimento, animal.idade_estimada_meses),
     });
   } catch (err) {
+    if (err.message.includes('UNIQUE')) {
+      return res.status(409).json({ erro: 'Brinco já cadastrado' });
+    }
     if (err instanceof ValidationError) {
       return res.status(400).json({ erro: err.message });
     }

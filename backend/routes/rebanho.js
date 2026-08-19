@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const herdService = require('../services/herdService');
 
-router.get('/', async (req, res) => {
+router.get('/', async (req, res, next) => {
   try {
     const filtros = {
       lote_id: req.query.lote_id ? parseInt(req.query.lote_id, 10) : undefined,
@@ -11,7 +11,7 @@ router.get('/', async (req, res) => {
     const data = await herdService.getRebanho(filtros);
     res.json(data);
   } catch (err) {
-    res.status(500).json({ erro: err.message });
+    next(err);
   }
 });
 
