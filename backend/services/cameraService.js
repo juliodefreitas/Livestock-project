@@ -31,13 +31,24 @@ class CameraService {
     try {
       console.log(`[CameraService] Iniciando câmera - Device ID: ${deviceId}`);
       
-      // TODO: Implementar inicialização real quando câmera estiver disponível
-      // Opções:
-      // 1. node-webcam: npm install node-webcam
-      // 2. opencv4nodejs: npm install opencv4nodejs (mais poderoso para OCR)
-      // 3. Usar browser Webcam API com Electron se necessário
-      
+            let Webcam;
+            try {
+              Webcam = require('node-webcam');
+            } catch (error) {
+              throw new Error('Instale node-webcam para usar uma câmera USB: ' + error.message);
+            }
+
       this.cameraDeviceId = deviceId;
+            this.camera = Webcam.create({
+              width: Number(process.env.CAMERA_WIDTH || 1280),
+              height: Number(process.env.CAMERA_HEIGHT || 720),
+              quality: Number(process.env.CAMERA_QUALITY || 85),
+              delay: 0,
+              saveImages: true,
+              output: 'jpeg',
+              device: this.cameraDeviceId,
+              callbackReturn: 'location'
+            });
       this.isInitialized = true;
       
       return true;
@@ -64,30 +75,24 @@ class CameraService {
 
       console.log(`[CameraService] Capturando imagem: ${filename}`);
 
-      // TODO: Implementar captura real
-      // Exemplo com node-webcam:
-      // const Webcam = require('node-webcam');
-      // const webcam = new Webcam({
-      //   width: 1280,
-      //   height: 720,
-      //   quality: this.imageQuality,
-      //   delay: 0,
-      //   saveImages: false,
-      //   output: 'jpeg',
-      //   device: this.cameraDeviceId,
-      //   callbackReturn: 'buffer'
-      // });
-      // const imageBuffer = await new Promise((resolve, reject) => {
-      //   webcam.capture(filename, (err, data) => {
-      //     if (err) reject(err);
-      //     resolve(data);
-      //   });
-      // });
-      // fs.writeFileSync(imagePath, imageBuffer);
+      if (!this.camera) {
+        throw new Error('Câmera não inicializada');
+      }
 
-      // Por enquanto, criar imagem dummy para teste
-      const dummyImageBuffer = Buffer.alloc(100);
-      fs.writeFileSync(imagePath, dummyImageBuffer);
+      const capturePath = imagePath.replace(/\.jpg$/i, '');
+      await new Promise((resolve, reject) => {
+        this.camera.capture(capturePath, (error, data) => {
+          if (error) return reject(error);
+          if (Buffer.isBuffer(data) && !fs.existsSync(imagePath)) {
+            fs.writeFileSync(imagePath, data);
+          }
+          resolve();
+        });
+      });
+
+      if (!fs.existsSync(imagePath)) {
+        throw new Error(`A câmera não produziu o arquivo esperado: ${imagePath}`);
+      }
 
       // Opcional: Converter para base64 para retornar inline
       const base64 = fs.readFileSync(imagePath).toString('base64');

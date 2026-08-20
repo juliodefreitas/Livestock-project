@@ -6,8 +6,13 @@
 
 const fs = require('fs');
 
-// TODO: npm install tesseract.js
-// const Tesseract = require('tesseract.js');
+let Tesseract;
+
+try {
+  Tesseract = require('tesseract.js');
+} catch (error) {
+  console.warn('[BrincoOCRService] Tesseract.js não instalado:', error.message);
+}
 
 class BrincoOCRService {
   constructor() {
@@ -23,12 +28,13 @@ class BrincoOCRService {
    */
   async initialize() {
     try {
+      if (!Tesseract) {
+        throw new Error('Instale tesseract.js para habilitar o reconhecimento do brinco');
+      }
+
       console.log('[BrincoOCRService] Inicializando Tesseract OCR');
-      
-      // TODO: Implementar inicialização real quando tesseract.js estiver instalado
-      // this.workerPromise = Tesseract.createWorker(this.languages);
-      // await this.workerPromise;
-      
+      this.workerPromise = Tesseract.createWorker(this.languages);
+      await this.workerPromise;
       this.isInitialized = true;
       return true;
     } catch (error) {
@@ -55,16 +61,12 @@ class BrincoOCRService {
     try {
       console.log(`[BrincoOCRService] Processando imagem: ${imagePath}`);
 
-      // TODO: Implementar OCR real
-      // const worker = await this.workerPromise;
-      // const result = await worker.recognize(imagePath);
-      // const text = result.data.text;
-
-      // Por enquanto, retornar resultado mockado
-      const text = '12345'; // Simulação
+      const worker = await this.workerPromise;
+      const result = await worker.recognize(imagePath);
+      const text = result.data.text;
       
       const brincoId = this.extractBrincoNumber(text);
-      const confidence = Math.random() * 0.4 + 0.6; // Simular confiança entre 0.6-1.0
+      const confidence = Number(result.data.confidence || 0) / 100;
 
       return {
         brincoId: brincoId,
@@ -113,18 +115,15 @@ class BrincoOCRService {
   extractBrincoNumber(text) {
     if (!text) return null;
 
-    // Remover espaços em branco
-    const cleanText = text.trim();
-
-    // Procurar por sequências numéricas de 4-8 dígitos
-    const matches = cleanText.match(/\d{4,8}/g);
+    const cleanText = text.trim().toUpperCase();
+    const matches = cleanText.match(/\b(?:[A-Z]{1,4}[- ]?)?\d{3,8}\b/g);
     
     if (!matches || matches.length === 0) {
       return null;
     }
 
     // Retornar o primeiro match (ou o mais frequente)
-    return matches[0];
+    return matches[0].replace(/\s+/g, '').replace(/([A-Z])-/g, '$1-');
   }
 
   /**
@@ -213,11 +212,11 @@ class BrincoOCRService {
    */
   async dispose() {
     try {
-      // TODO: Implementar limpeza real
-      // if (this.workerPromise) {
-      //   const worker = await this.workerPromise;
-      //   await worker.terminate();
-      // }
+      if (this.workerPromise) {
+        const worker = await this.workerPromise;
+        await worker.terminate();
+      }
+      this.workerPromise = null;
       this.isInitialized = false;
       console.log('[BrincoOCRService] Worker finalizado');
     } catch (error) {
