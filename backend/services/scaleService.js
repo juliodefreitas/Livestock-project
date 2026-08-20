@@ -4,9 +4,15 @@
  * Suporta comunicação com sensores de peso via portas seriais
  */
 
-// TODO: npm install serialport
-// const SerialPort = require('serialport');
-// const { ReadlineParser } = require('@serialport/parser-readline');
+let SerialPort;
+let ReadlineParser;
+
+try {
+  ({ SerialPort } = require('serialport'));
+  ({ ReadlineParser } = require('@serialport/parser-readline'));
+} catch (error) {
+  console.warn('[ScaleService] Dependências seriais não instaladas:', error.message);
+}
 
 class ScaleService {
   constructor() {
@@ -19,6 +25,8 @@ class ScaleService {
     this.weightHistoryLimit = 10;
     this.weightHistory = [];
     this.parser = null;
+    this.stableSamplesRequired = Number(process.env.SCALE_STABLE_SAMPLES || 3);
+    this.stableToleranceKg = Number(process.env.SCALE_STABLE_TOLERANCE_KG || 1);
     
     // Callbacks para eventos
     this.onWeightReceived = null;
@@ -34,29 +42,22 @@ class ScaleService {
   async connect(portName = 'COM3', baudRate = 9600) {
     try {
       console.log(`[ScaleService] Conectando na porta ${portName} (${baudRate} baud)`);
-      
-      // TODO: Implementar conexão real quando serialport estiver instalado
-      // this.portName = portName;
-      // this.baudRate = baudRate;
-      // 
-      // this.port = new SerialPort({
-      //   path: portName,
-      //   baudRate: baudRate,
-      //   autoOpen: false
-      // });
-      // 
-      // this.parser = this.port.pipe(new ReadlineParser({ delimiter: '\n' }));
-      // 
-      // this.port.on('error', (err) => this.handleError(err));
-      // this.parser.on('data', (data) => this.handleWeightData(data));
-      // 
-      // await new Promise((resolve, reject) => {
-      //   this.port.open((err) => {
-      //     if (err) reject(err);
-      //     else resolve();
-      //   });
-      // });
-      
+
+      if (!SerialPort || !ReadlineParser) {
+        throw new Error('Instale serialport e @serialport/parser-readline para usar a balança real');
+      }
+
+      this.portName = portName;
+      this.baudRate = Number(baudRate);
+      this.port = new SerialPort({ path: this.portName, baudRate: this.baudRate, autoOpen: false });
+      this.parser = this.port.pipe(new ReadlineParser({ delimiter: '\n' }));
+      this.port.on('error', (error) => this.handleError(error));
+      this.parser.on('data', (data) => this.handleWeightData(data));
+
+      await new Promise((resolve, reject) => {
+        this.port.open((error) => (error ? reject(error) : resolve()));
+      });
+
       this.isConnected = true;
       console.log('[ScaleService] Balança conectada com sucesso');
       
@@ -226,7 +227,9 @@ class ScaleService {
       baudRate: this.baudRate,
       lastWeight: this.lastWeight,
       lastWeightTime: this.lastWeightTime,
-      historySize: this.weightHistory.length
+      historySize: this.weightHistory.length,
+      stableSamplesRequired: this.stableSamplesRequired,
+      stableToleranceKg: this.stableToleranceKg
     };
   }
 
@@ -236,15 +239,14 @@ class ScaleService {
    */
   async disconnect() {
     try {
-      // TODO: Implementar desconexão real
-      // if (this.port && this.port.isOpen) {
-      //   await new Promise((resolve, reject) => {
-      //     this.port.close((err) => {
-      //       if (err) reject(err);
-      //       else resolve();
-      //     });
-      //   });
-      // }
+      if (this.port && this.port.isOpen) {
+        await new Promise((resolve, reject) => {
+          this.port.close((error) => (error ? reject(error) : resolve()));
+        });
+      }
+
+      this.port = null;
+      this.parser = null;
       
       this.isConnected = false;
       this.clearHistory();
