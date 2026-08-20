@@ -2,20 +2,26 @@
 
 Este documento lista os materiais necessários para integrar câmera, Arduino, células de carga, HX711 e o servidor local do sistema Pecuária Smart.
 
+## Situação informada do projeto
+
+- **Câmera:** será uma webcam USB, portanto não é necessário adquirir uma câmera industrial neste momento.
+- **Arduino:** será cedido pela faculdade. Antes da montagem, confirme o modelo da placa, o cabo USB e a porta COM utilizada.
+- **Itens que ainda precisam ser confirmados ou adquiridos:** células de carga, HX711, plataforma/brete, cabos, conectores, proteção elétrica e iluminação.
+
 ## 1. Computador e comunicação
 
 | Quantidade | Material | Especificação/função |
 |---:|---|---|
-| 1 | Notebook | Windows, Node.js 18 ou superior, navegador atualizado e pelo menos uma porta USB disponível. |
-| 1 | Cabo USB de dados | Compatível com o Arduino. Deve permitir transmissão de dados, não somente carregamento. |
-| 1 | Cabo USB adicional | Recomendado para a webcam, caso ela não tenha cabo integrado. |
+| 1 | Notebook | Windows, Node.js 18 ou superior, navegador atualizado e pelo menos duas portas USB disponíveis, ou um hub alimentado. |
+| 1 | Cabo USB de dados | Compatível com o Arduino cedido pela faculdade. Deve permitir transmissão de dados, não somente carregamento. |
+| 1 | Cabo USB adicional | Para a webcam USB, caso ela não tenha cabo integrado. |
 | 1 | Hub USB alimentado | Opcional. Recomendado se o notebook não tiver portas USB suficientes ou se a câmera consumir muita energia. |
 
 ## 2. Identificação por câmera
 
 | Quantidade | Material | Especificação/função |
 |---:|---|---|
-| 1 | Webcam USB | Preferencialmente 720p ou superior, com foco adequado para o número do brinco. |
+| 1 | Webcam USB | Será providenciada. Preferencialmente 720p ou superior, com foco adequado para o número do brinco. |
 | 1 | Suporte para webcam | Mantém a câmera fixa e direcionada para o brinco. |
 | 1 | Iluminação LED | Luz difusa para evitar sombras e reflexos no brinco. |
 | 1 | Proteção para câmera | Opcional. Protege a webcam contra poeira, umidade e impactos no ambiente rural. |
@@ -52,8 +58,8 @@ Este documento lista os materiais necessários para integrar câmera, Arduino, c
 
 | Quantidade | Material | Especificação/função |
 |---:|---|---|
-| 1 | Arduino Uno, Nano ou Mega | Controlador responsável por ler o HX711 e enviar o peso ao notebook. |
-| 1 | Cabo USB de dados | Comunicação entre Arduino e notebook. |
+| 1 | Arduino Uno, Nano ou Mega | Será cedido pela faculdade. Controlador responsável por ler o HX711 e enviar o peso ao notebook. |
+| 1 | Cabo USB de dados | Comunicação entre o Arduino cedido e o notebook. |
 | 1 | Protoboard ou placa de terminais | Opcional. Facilita testes e organização das ligações. |
 | 1 | Conjunto de fios | Fios para alimentação, sinais e conexão entre HX711 e Arduino. |
 | 1 | Bornes e conectores | Recomendados para conexões firmes e manutenção. |
