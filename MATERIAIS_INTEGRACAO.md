@@ -6,7 +6,7 @@ Este documento lista os materiais necessários para integrar câmera, Arduino, c
 
 - **Câmera:** será uma webcam USB, portanto não é necessário adquirir uma câmera industrial neste momento.
 - **Arduino:** será cedido pela faculdade. Antes da montagem, confirme o modelo da placa, o cabo USB e a porta COM utilizada.
-- **Itens que ainda precisam ser confirmados ou adquiridos:** células de carga, HX711, plataforma/brete, cabos, conectores, proteção elétrica e iluminação.
+- **Itens que ainda precisam ser confirmados ou adquiridos:** quatro células de carga com capacidade adequada para animais de até 1.000 kg, HX711, plataforma/brete, cabos, conectores, proteção elétrica e iluminação.
 
 ## 1. Computador e comunicação
 
@@ -39,7 +39,7 @@ Este documento lista os materiais necessários para integrar câmera, Arduino, c
 | Quantidade | Material | Especificação/função |
 |---:|---|---|
 | 1 | Plataforma ou brete de pesagem | Estrutura metálica capaz de suportar o peso máximo do animal. |
-| 4 | Células de carga | Mesmo modelo e mesma capacidade nominal. A capacidade deve ser compatível com a plataforma e o animal. |
+| 4 | Células de carga | Mesmo modelo e mesma capacidade nominal. O projeto considera animais de até 1.000 kg; a capacidade individual deve incluir margem para impactos e distribuição desigual. |
 | 1 | Caixa de junção | Combina os sinais das quatro células em uma ponte de pesagem. |
 | 1 | Módulo HX711 | Amplificador e conversor analógico-digital para as células de carga. |
 | 1 | Kit de fixação | Parafusos, porcas, arruelas e suportes para fixar as células à estrutura. |
@@ -53,6 +53,24 @@ Este documento lista os materiais necessários para integrar câmera, Arduino, c
 - As células não devem encostar diretamente em partes móveis ou inclinadas da estrutura.
 - A plataforma deve ser nivelada antes da calibração.
 - A capacidade total do conjunto deve considerar o peso máximo do animal com margem de segurança.
+
+Para um animal de até 1.000 kg, o peso idealmente se distribui assim:
+
+```text
+Peso total = célula 1 + célula 2 + célula 3 + célula 4
+1.000 kg  = aproximadamente 250 kg por célula
+```
+
+Os 250 kg por célula são apenas uma distribuição ideal. O animal pode concentrar mais peso em dois pontos, entrar na plataforma com impacto ou se movimentar. Por isso, não escolha a capacidade individual apenas dividindo 1.000 kg por quatro. Para este projeto, a recomendação é usar **quatro células de 500 kg cada**, totalizando 2.000 kg de capacidade nominal distribuída. Essa margem é mais adequada que quatro células de 250 kg. Uma capacidade maior pode ser adotada se for definida pelo responsável mecânico.
+
+### Como o peso é somado
+
+Há duas configurações possíveis:
+
+1. **Quatro células + caixa de junção + um HX711:** a caixa combina as células em uma ponte de pesagem. O HX711 lê o sinal combinado e o Arduino recebe uma leitura correspondente ao peso total após a calibração. Nesse caso, o código não soma quatro leituras independentes.
+2. **Quatro células em canais independentes:** exige quatro canais de conversão, ou uma placa específica com quatro entradas. O Arduino calcula `peso_total = leitura_1 + leitura_2 + leitura_3 + leitura_4` e aplica a calibração de cada canal.
+
+O firmware deste projeto foi preparado para a primeira configuração, com quatro células conectadas ao HX711 por uma caixa de junção. O peso exibido pelo Arduino deve ser o peso total da plataforma, como `1000.00 kg`.
 
 ## 4. Arduino e ligações elétricas
 
