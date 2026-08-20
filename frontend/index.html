@@ -436,6 +436,10 @@
                 <option value="com_cria_ao_pe">Com cria ao pé</option>
               </select>
             </div>
+            <div class="field">
+              <label for="animalPesoInicial">Primeira pesagem (kg, opcional)</label>
+              <input id="animalPesoInicial" type="number" min="50" max="2000" step="0.1" placeholder="Ex.: 320" />
+            </div>
             <button class="button" id="salvarAnimalButton">Salvar animal</button>
           </div>
 
@@ -454,6 +458,27 @@
               <input id="dataPesoManual" type="date" />
             </div>
             <button class="button" id="salvarPesoManualButton">Salvar peso</button>
+          </div>
+
+          <div class="form-card">
+            <h3>Pesagem automática</h3>
+            <p class="small">Captura o brinco pela câmera, lê o peso estável do Arduino e registra no banco.</p>
+            <button class="button" id="configurarHardwareButton">Configurar hardware</button>
+            <button class="button secondary" id="pesagemAutomaticaButton">Iniciar pesagem</button>
+            <p class="small" id="hardwareStatus">Hardware não configurado.</p>
+          </div>
+
+          <div class="form-card">
+            <h3>Realojar animal</h3>
+            <div class="field">
+              <label for="animalTransferenciaSelect">Animal</label>
+              <select id="animalTransferenciaSelect"></select>
+            </div>
+            <div class="field">
+              <label for="loteDestinoSelect">Novo lote</label>
+              <select id="loteDestinoSelect"></select>
+            </div>
+            <button class="button" id="transferirAnimalButton">Transferir animal</button>
           </div>
         </div>
       </section>
@@ -548,11 +573,18 @@
     const animalLoteSelect = document.querySelector('#animalLote');
     const animalDataEntradaInput = document.querySelector('#animalDataEntrada');
     const animalCondicaoInput = document.querySelector('#animalCondicao');
+    const animalPesoInicialInput = document.querySelector('#animalPesoInicial');
     const salvarAnimalButton = document.querySelector('#salvarAnimalButton');
     const animalPesoSelect = document.querySelector('#animalPesoSelect');
     const pesoManualKgInput = document.querySelector('#pesoManualKg');
     const dataPesoManualInput = document.querySelector('#dataPesoManual');
     const salvarPesoManualButton = document.querySelector('#salvarPesoManualButton');
+    const configurarHardwareButton = document.querySelector('#configurarHardwareButton');
+    const pesagemAutomaticaButton = document.querySelector('#pesagemAutomaticaButton');
+    const hardwareStatus = document.querySelector('#hardwareStatus');
+    const animalTransferenciaSelect = document.querySelector('#animalTransferenciaSelect');
+    const loteDestinoSelect = document.querySelector('#loteDestinoSelect');
+    const transferirAnimalButton = document.querySelector('#transferirAnimalButton');
     let racaChart, categoriaChart, desempenhoChart;
     let dashboardLoaded = false;
 
@@ -743,6 +775,7 @@
       const lotes = await fetchJson(`${apiBase}/lotes`);
       loteSelect.innerHTML = '<option value="">Todos os lotes</option>' + lotes.map(l => `<option value="${l.id}">${l.nome}</option>`).join('');
       animalLoteSelect.innerHTML = lotes.map(l => `<option value="${l.id}">${l.nome}</option>`).join('');
+      loteDestinoSelect.innerHTML = lotes.map(l => `<option value="${l.id}">${l.nome}</option>`).join('');
       return lotes;
     }
 
@@ -750,6 +783,7 @@
       const filtro = loteSelect.value ? `?lote_id=${loteSelect.value}` : '';
       const rebanho = await fetchJson(`${apiBase}/animais${filtro}`);
       animalPesoSelect.innerHTML = (rebanho.animais || []).map(animal => `<option value="${animal.id}">${animal.id_brinco} (${animal.raca})</option>`).join('');
+      animalTransferenciaSelect.innerHTML = (rebanho.animais || []).map(animal => `<option value="${animal.id}">${animal.id_brinco} (${animal.raca})</option>`).join('');
       if (!animalPesoSelect.value && (rebanho.animais || []).length) {
         animalPesoSelect.value = String(rebanho.animais[0].id);
       }
@@ -783,6 +817,7 @@
       const lote_id = animalLoteSelect.value;
       const data_entrada = animalDataEntradaInput.value;
       const condicao_reprodutiva = animalCondicaoInput.value.trim();
+      const peso_kg = animalPesoInicialInput.value ? Number(animalPesoInicialInput.value) : undefined;
 
       if (!id_brinco || !raca || !lote_id || !data_entrada) return;
 
@@ -796,6 +831,7 @@
           data_nascimento,
           data_entrada,
           condicao_reprodutiva,
+          peso_kg,
           lote_id: Number(lote_id)
         })
       });
@@ -807,8 +843,45 @@
       animalDataNascimentoInput.value = '';
       animalDataEntradaInput.value = '';
       animalCondicaoInput.value = '';
+      animalPesoInicialInput.value = '';
       await carregarLotes();
       loteSelect.value = String(lote_id);
+      await carregarDados();
+    }
+
+    async function configurarHardware() {
+      hardwareStatus.textContent = 'Configurando câmera, OCR e Arduino...';
+      const res = await fetch(`${apiBase}/pesagens/camera/setup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || data.erro || 'Não foi possível configurar o hardware');
+      hardwareStatus.textContent = 'Hardware configurado e pronto.';
+    }
+
+    async function realizarPesagemAutomatica() {
+      pesagemAutomaticaButton.disabled = true;
+      hardwareStatus.textContent = 'Capturando brinco e aguardando peso estável...';
+      try {
+        const res = await fetch(`${apiBase}/pesagens/camera`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || data.erro || 'Pesagem automática não concluída');
+        hardwareStatus.textContent = `Pesagem registrada: ${data.animal.id_brinco}, ${data.pesagem.peso_kg} kg.`;
+        await carregarDados();
+      } finally {
+        pesagemAutomaticaButton.disabled = false;
+      }
+    }
+
+    async function transferirAnimal() {
+      const animalId = animalTransferenciaSelect.value;
+      const loteId = loteDestinoSelect.value;
+      if (!animalId || !loteId) return;
+      const res = await fetch(`${apiBase}/animais/${animalId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lote_id: Number(loteId) })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.erro || 'Erro ao transferir animal');
       await carregarDados();
     }
 
@@ -933,6 +1006,15 @@
       } catch (err) {
         alert(err.message);
       }
+    });
+    configurarHardwareButton.addEventListener('click', async () => {
+      try { await configurarHardware(); } catch (err) { hardwareStatus.textContent = err.message; }
+    });
+    pesagemAutomaticaButton.addEventListener('click', async () => {
+      try { await realizarPesagemAutomatica(); } catch (err) { hardwareStatus.textContent = err.message; }
+    });
+    transferirAnimalButton.addEventListener('click', async () => {
+      try { await transferirAnimal(); } catch (err) { alert(err.message); }
     });
     homeButton.addEventListener('click', showHome);
     dashboardButton.addEventListener('click', showDashboard);

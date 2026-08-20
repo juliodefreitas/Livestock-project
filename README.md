@@ -190,6 +190,48 @@ npm run audit
 - Parsing de dados de peso
 - Histórico de últimas pesagens
 
+## Integração física no notebook
+
+### Equipamentos necessários
+
+- Notebook Windows com Node.js 18 ou superior e uma porta USB livre.
+- Arduino Uno, Nano ou Mega com cabo USB de dados.
+- Módulo amplificador HX711, um para cada conjunto de células configurado.
+- Quatro células de carga compatíveis com a capacidade da plataforma, normalmente 50 kg, 100 kg ou 500 kg cada.
+- Plataforma metálica ou balança de contenção dimensionada para o peso do animal.
+- Caixa de proteção, bornes, fios, conectores e fonte USB estável para o Arduino.
+- Webcam USB com foco adequado para enquadrar o número do brinco e iluminação difusa.
+- Cabo USB adicional para a webcam, se necessário.
+
+### Montagem e software
+
+1. Ligue as células de carga ao HX711 conforme o diagrama do fabricante. Em uma plataforma de quatro células, use uma caixa de junção para formar a ponte antes do HX711.
+2. Ligue `VCC`, `GND`, `DT` e `SCK` do HX711 ao Arduino. O firmware deve fazer tara, calibração e enviar uma leitura por linha, por exemplo `432.50 kg`.
+3. Conecte o Arduino e a webcam ao notebook. No Windows, descubra a porta em **Gerenciador de Dispositivos > Portas (COM e LPT)**.
+4. Copie `.env.example` para `.env` e ajuste `SCALE_PORT`, `SCALE_BAUD_RATE` e `CAMERA_DEVICE_ID`.
+5. Instale as dependências e permita os scripts nativos quando solicitado:
+
+```powershell
+npm install
+npm approve-scripts
+npm run migrate
+npm start
+```
+
+6. Abra `http://localhost:3000`, use **Configurar hardware** e depois **Iniciar pesagem**.
+
+O servidor não grava o peso imediatamente: aguarda amostras consecutivas dentro da tolerância definida por `SCALE_STABLE_SAMPLES` e `SCALE_STABLE_TOLERANCE_KG`. O OCR exige que o texto do brinco esteja visível e com contraste suficiente; a leitura precisa corresponder a um `id_brinco` já cadastrado no banco.
+
+### Firmware do Arduino
+
+O projeto Node.js recebe o peso, mas não grava firmware no Arduino. O Arduino precisa ser programado separadamente para ler o HX711 e transmitir linhas como:
+
+```text
+432.50 kg
+```
+
+Também são necessários tara e calibração usando um peso conhecido. Sem esse firmware e sem a calibração mecânica, a porta COM pode estar conectada, mas o peso registrado não será confiável.
+
 ## Segurança
 
 - **CORS**: restringido por `CORS_ORIGIN` (padrão: http://localhost:3000)

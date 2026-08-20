@@ -159,7 +159,12 @@ class ScaleService {
    * @returns {Object|null} - {weight: number, timestamp: Date} ou null
    */
   getCurrentWeight() {
-    if (this.lastWeight === null) return null;
+    if (this.lastWeight === null || this.weightHistory.length < this.stableSamplesRequired) return null;
+
+    const samples = this.weightHistory.slice(0, this.stableSamplesRequired).map((item) => item.weight);
+    const minimum = Math.min(...samples);
+    const maximum = Math.max(...samples);
+    if (maximum - minimum > this.stableToleranceKg) return null;
     
     return {
       weight: this.lastWeight,

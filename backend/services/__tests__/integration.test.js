@@ -97,6 +97,29 @@ test('Criação, atualização e consulta de animal', async () => {
   assert.equal(fetched.body.id_brinco, 'BR-TEST-001');
 });
 
+test('Cadastro pode registrar a primeira pesagem e transferir o animal', async () => {
+  const origem = await request('POST', '/api/lotes', { nome: 'Lote Origem' });
+  const destino = await request('POST', '/api/lotes', { nome: 'Lote Destino' });
+  const created = await request('POST', '/api/animais', {
+    id_brinco: 'BR-PRIMEIRA-PESAGEM',
+    raca: 'Nelore',
+    sexo: 'macho',
+    data_nascimento: '2023-01-15',
+    data_entrada: '2025-01-10',
+    lote_id: origem.body.id,
+    peso_kg: 320,
+  });
+
+  assert.equal(created.status, 201);
+  const pesagens = await request('GET', `/api/pesagens/animal/${created.body.id}`);
+  assert.equal(pesagens.body.length, 1);
+  assert.equal(pesagens.body[0].peso_kg, 320);
+
+  const moved = await request('PUT', `/api/animais/${created.body.id}`, { lote_id: destino.body.id });
+  assert.equal(moved.status, 200);
+  assert.equal(moved.body.lote_id, destino.body.id);
+});
+
 test('Rejeição de animal com payload inválido', async () => {
   const res = await request('POST', '/api/animais', {
     id_brinco: 'BR-TEST-002',

@@ -51,6 +51,7 @@ router.post('/', (req, res, next) => {
       condicao_reprodutiva,
       data_entrada,
       lote_id,
+      peso_kg,
     } = req.body;
 
     if (!id_brinco || !raca) {
@@ -63,25 +64,31 @@ router.post('/', (req, res, next) => {
     const loteIdValidado = validatePositiveInteger(lote_id, 'lote_id');
     const dataNascimentoValidada = data_nascimento ? validateDateField(data_nascimento, 'data_nascimento') : null;
     const idadeEstimadaValidada = idade_estimada_meses == null ? null : validatePositiveInteger(idade_estimada_meses, 'idade_estimada_meses');
+    const pesoInicialValidado = peso_kg == null || peso_kg === '' ? null : require('../utils/validation').validatePesoKg(peso_kg);
     validateIdadeOuNascimento(dataNascimentoValidada, idadeEstimadaValidada);
 
     ensureRecordExists(db, 'lote', loteIdValidado, 'lote_id');
 
-    const result = db
-      .prepare(`
+    const transaction = db.transaction(() => {
+      const result = db
+        .prepare(`
         INSERT INTO animal (id_brinco, raca, sexo, data_nascimento, idade_estimada_meses, condicao_reprodutiva, data_entrada, lote_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `)
-      .run(
-        id_brinco,
-        raca,
-        sexoValidado,
-        dataNascimentoValidada,
-        idadeEstimadaValidada,
-        condicaoValidada,
-        dataEntradaValidada,
-        loteIdValidado
-      );
+        .run(
+          id_brinco, raca, sexoValidado, dataNascimentoValidada,
+          idadeEstimadaValidada, condicaoValidada, dataEntradaValidada, loteIdValidado
+        );
+
+      if (pesoInicialValidado != null) {
+        db.prepare('INSERT INTO pesagem (animal_id, peso_kg, data_pesagem, origem) VALUES (?, ?, ?, ?)')
+          .run(result.lastInsertRowid, pesoInicialValidado, dataEntradaValidada, 'manual');
+      }
+
+      return result;
+    });
+
+    const result = transaction();
 
     const animal = db.prepare('SELECT * FROM animal WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json({
