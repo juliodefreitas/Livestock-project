@@ -232,6 +232,8 @@ O projeto Node.js recebe o peso, mas não grava firmware no Arduino. O Arduino p
 
 Também são necessários tara e calibração usando um peso conhecido. Sem esse firmware e sem a calibração mecânica, a porta COM pode estar conectada, mas o peso registrado não será confiável.
 
+O firmware de referência está em `arduino/hx711_scale/hx711_scale.ino`. Na Arduino IDE, instale a biblioteca **HX711** pelo gerenciador de bibliotecas, selecione a placa e a porta corretas, ajuste `calibrationFactor`, grave o sketch e confirme no Monitor Serial em 9600 baud que aparecem linhas no formato `432.50 kg`.
+
 ## Segurança
 
 - **CORS**: restringido por `CORS_ORIGIN` (padrão: http://localhost:3000)
