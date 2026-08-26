@@ -60,6 +60,12 @@ npm run seed
 npm run dev
 ```
 
+### Construir a interface PWA
+
+```bash
+npm run build
+```
+
 ### Modo produção
 
 ```bash
@@ -90,11 +96,12 @@ npm run audit
 - **Services**: cálculos, classificação, integrações de hardware, preços
 - **Database**: SQLite com migrações automáticas
 
-### Frontend (HTML + Chart.js)
+### Frontend (React + PWA)
 
-- Dashboard de lote com filtros por sexo
+- Dashboard React responsivo com filtros por lote
 - Gráficos de peso e ganho médio diário (GMD)
 - Listagem de animais com ficha individual
+- Aplicativo instalável, com cache da interface para acesso offline
 
 ## Endpoints principais
 
@@ -281,7 +288,8 @@ O firmware de referência está em `arduino/hx711_scale/hx711_scale.ino`. Na Ard
 │   │   └── classification_rules.json
 │   └── server.js              # Servidor principal
 ├── frontend/
-│   └── index.html
+│   ├── public/                  # Manifesto, ícone e service worker PWA
+│   └── src/                     # Componentes React e estilos
 ├── data/
 │   └── camera_images/         # Imagens capturadas
 ├── .env.example
@@ -387,6 +395,7 @@ Instale as dependências e execute o servidor:
 
 ```bash
 npm install
+npm run build
 npm run start
 ```
 
@@ -402,7 +411,7 @@ Ou use a flag `--seed` diretamente:
 node backend/server.js --seed
 ```
 
-O frontend está em `frontend/index.html` e é servido diretamente pelo servidor Express.
+O código da interface está em `frontend/src/`; após `npm run build`, o Express serve o bundle PWA em `frontend/dist/`.
 
 ## Observações
 

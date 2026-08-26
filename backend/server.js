@@ -49,10 +49,16 @@ app.use('/api/pesagens', pesagensRouter);
 app.use('/api/camera', cameraRouter);
 app.use('/api/pesagens', pesagensCamera);
 
-app.use(express.static(path.join(__dirname, '..', 'frontend')));
+const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
+app.use(express.static(frontendDist));
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', modulo: 'analise-rebanho' });
+});
+
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/')) return next();
+  res.sendFile(path.join(frontendDist, 'index.html'));
 });
 
 // Middleware de erro
