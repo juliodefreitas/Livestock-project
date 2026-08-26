@@ -13,12 +13,16 @@ if (!fs.existsSync(dbDir)) {
 }
 
 const db = new DatabaseSync(DB_PATH);
+const configuredBusyTimeout = Number(process.env.SQLITE_BUSY_TIMEOUT_MS);
+const busyTimeoutMs = Number.isFinite(configuredBusyTimeout) && configuredBusyTimeout > 0
+  ? configuredBusyTimeout
+  : 15000;
 
 if (process.env.NODE_ENV !== 'test') {
   db.exec('PRAGMA journal_mode = WAL;');
 }
 db.exec('PRAGMA foreign_keys = ON;');
-db.exec('PRAGMA busy_timeout = 5000;');
+db.exec(`PRAGMA busy_timeout = ${Math.floor(busyTimeoutMs)};`);
 
 if (typeof db.transaction !== 'function') {
   db.transaction = (fn) => {

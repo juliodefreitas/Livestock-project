@@ -39,6 +39,7 @@ Variáveis disponíveis:
 - `CAMERA_DEVICE_ID`: ID da câmera USB (padrão: 0)
 - `SCALE_PORT`: porta serial da balança (padrão: COM3/Linux: /dev/ttyUSB0)
 - `SCALE_BAUD_RATE`: velocidade serial (padrão: 9600)
+- `SQLITE_BUSY_TIMEOUT_MS`: tempo de espera para bloqueios temporários do SQLite (padrão: 15000)
 
 ### 4. Executar migrações do banco
 
