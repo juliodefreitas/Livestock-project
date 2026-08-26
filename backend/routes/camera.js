@@ -237,7 +237,7 @@ router.post('/identify-and-validate', async (req, res, next) => {
       const validations = [];
       for (const image of images) {
         try {
-          const validation = await ocrService.identifyAndValidate(db, image.path);
+          const validation = await ocrService.identifyAndValidate(db, image.path, req.fazenda.id);
           validations.push({
             ...validation,
             imagePath: image.path,
@@ -271,7 +271,7 @@ router.post('/identify-and-validate', async (req, res, next) => {
       const image = await cameraService.captureImage();
       
       console.log('[Camera] Processando OCR...');
-      result = await ocrService.identifyAndValidate(db, image.path);
+      result = await ocrService.identifyAndValidate(db, image.path, req.fazenda.id);
       result.imagePath = image.path;
       result.imageFilename = image.filename;
     }

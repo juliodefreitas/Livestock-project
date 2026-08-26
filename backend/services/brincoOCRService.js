@@ -132,13 +132,16 @@ class BrincoOCRService {
    * @param {string} brincoId - ID do brinco
    * @returns {Object|null} - Dados do animal ou null
    */
-  validateBrinco(db, brincoId) {
+  validateBrinco(db, brincoId, fazendaId) {
     if (!brincoId) return null;
 
     try {
       const animal = db
-        .prepare('SELECT * FROM animal WHERE id_brinco = ?')
-        .get(brincoId);
+        .prepare(`
+          SELECT a.* FROM animal a JOIN lote l ON l.id = a.lote_id
+          WHERE a.id_brinco = ? AND l.fazenda_id = ?
+        `)
+        .get(brincoId, fazendaId);
       
       return animal || null;
     } catch (error) {
@@ -153,7 +156,7 @@ class BrincoOCRService {
    * @param {string} imagePath - Caminho da imagem
    * @returns {Promise<{animal: Object, confidence: number, brincoId: string}>}
    */
-  async identifyAndValidate(db, imagePath) {
+  async identifyAndValidate(db, imagePath, fazendaId) {
     try {
       // 1. OCR da imagem
       const ocrResult = await this.identifyBrinco(imagePath);
@@ -165,7 +168,7 @@ class BrincoOCRService {
       }
 
       // 2. Validar brinco no BD
-      const animal = this.validateBrinco(db, ocrResult.brincoId);
+      const animal = this.validateBrinco(db, ocrResult.brincoId, fazendaId);
       
       if (!animal) {
         throw new Error(`Brinco não encontrado no banco de dados: ${ocrResult.brincoId}`);

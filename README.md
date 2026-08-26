@@ -75,6 +75,10 @@ npm start
 
 O servidor estará disponível em `http://localhost:3000` (ou na `PORT` configurada).
 
+### Primeiro acesso
+
+Ao abrir a aplicação, selecione **Ainda não tenho cadastro** e informe o nome da fazenda, o CNPJ e uma senha de pelo menos oito caracteres. Cada CNPJ visualiza apenas seus próprios lotes, animais, pesagens e cotações. Dados existentes de instalações anteriores são associados à primeira fazenda cadastrada.
+
 ## Testar
 
 Executar testes unitários:
@@ -94,6 +98,7 @@ npm run audit
 ### Backend (Express + SQLite)
 
 - **Routes**: `/api/animais`, `/api/lotes`, `/api/rebanho`, `/api/pesagens`, `/api/camera`, `/api/cotacao`
+- **Autenticação**: cadastro e login por CNPJ com senha protegida por hash e sessões de 12 horas
 - **Services**: cálculos, classificação, integrações de hardware, preços
 - **Database**: SQLite com migrações automáticas
 

@@ -6,7 +6,7 @@ const { ValidationError, validatePositiveInteger } = require('../utils/validatio
 
 router.get('/', (req, res, next) => {
   try {
-    const lotes = db.prepare('SELECT * FROM lote ORDER BY nome').all();
+    const lotes = db.prepare('SELECT * FROM lote WHERE fazenda_id = ? ORDER BY nome').all(req.fazenda.id);
     res.json(lotes);
   } catch (err) {
     next(err);
@@ -16,7 +16,7 @@ router.get('/', (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
   try {
     const id = validatePositiveInteger(req.params.id, 'id');
-    const agregado = await herdService.getLoteAgregado(id);
+    const agregado = await herdService.getLoteAgregado(id, req.fazenda.id);
     if (!agregado) return res.status(404).json({ erro: 'Lote não encontrado' });
     res.json(agregado);
   } catch (err) {
@@ -32,8 +32,10 @@ router.post('/', (req, res, next) => {
     const { nome, descricao } = req.body;
     if (!nome) return res.status(400).json({ erro: 'Nome do lote é obrigatório' });
 
-    const result = db.prepare('INSERT INTO lote (nome, descricao) VALUES (?, ?)').run(nome, descricao || null);
-    const lote = db.prepare('SELECT * FROM lote WHERE id = ?').get(result.lastInsertRowid);
+    const result = db.prepare('INSERT INTO lote (nome, descricao, fazenda_id) VALUES (?, ?, ?)').run(
+      nome, descricao || null, req.fazenda.id,
+    );
+    const lote = db.prepare('SELECT * FROM lote WHERE id = ? AND fazenda_id = ?').get(result.lastInsertRowid, req.fazenda.id);
     res.status(201).json(lote);
   } catch (err) {
     if (err.message.includes('UNIQUE')) {

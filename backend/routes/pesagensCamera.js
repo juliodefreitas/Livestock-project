@@ -88,7 +88,7 @@ router.post('/camera', async (req, res, next) => {
 
     for (const image of images) {
       try {
-        const identification = await ocrService.identifyAndValidate(db, image.path);
+        const identification = await ocrService.identifyAndValidate(db, image.path, req.fazenda.id);
         identificationAttempts.push({
           success: true,
           brincoId: identification.brincoId,

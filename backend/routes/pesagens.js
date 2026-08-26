@@ -25,7 +25,11 @@ router.post('/', (req, res, next) => {
     const dataPesagemValidada = validateDateField(data_pesagem, 'data_pesagem');
     const origemValidada = validateOrigemPesagem(origem);
 
-    ensureRecordExists(db, 'animal', animalIdValidado, 'animal_id');
+    const animal = db.prepare(`
+      SELECT a.id FROM animal a JOIN lote l ON l.id = a.lote_id
+      WHERE a.id = ? AND l.fazenda_id = ?
+    `).get(animalIdValidado, req.fazenda.id);
+    if (!animal) return res.status(404).json({ erro: 'animal_id não encontrado' });
 
     const result = db
       .prepare('INSERT INTO pesagem (animal_id, peso_kg, data_pesagem, origem) VALUES (?, ?, ?, ?)')
@@ -50,8 +54,12 @@ router.post('/', (req, res, next) => {
 router.get('/animal/:animalId', (req, res) => {
   try {
     const pesagens = db
-      .prepare('SELECT * FROM pesagem WHERE animal_id = ? ORDER BY data_pesagem ASC')
-      .all(parseInt(req.params.animalId, 10));
+      .prepare(`
+        SELECT p.* FROM pesagem p
+        JOIN animal a ON a.id = p.animal_id JOIN lote l ON l.id = a.lote_id
+        WHERE p.animal_id = ? AND l.fazenda_id = ? ORDER BY p.data_pesagem ASC
+      `)
+      .all(parseInt(req.params.animalId, 10), req.fazenda.id);
 
     res.json(
       pesagens.map((p) => ({
@@ -67,7 +75,10 @@ router.get('/animal/:animalId', (req, res) => {
 router.get('/lote/:loteId', (req, res) => {
   try {
     const loteId = parseInt(req.params.loteId, 10);
-    const animais = db.prepare('SELECT id FROM animal WHERE lote_id = ?').all(loteId);
+    const animais = db.prepare(`
+      SELECT a.id FROM animal a JOIN lote l ON l.id = a.lote_id
+      WHERE a.lote_id = ? AND l.fazenda_id = ?
+    `).all(loteId, req.fazenda.id);
     if (!animais.length) return res.json([]);
 
     const placeholders = animais.map(() => '?').join(',');

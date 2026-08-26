@@ -11,6 +11,8 @@ const cotacaoRouter = require('./routes/cotacao');
 const pesagensRouter = require('./routes/pesagens');
 const cameraRouter = require('./routes/camera');
 const pesagensCamera = require('./routes/pesagensCamera');
+const authRouter = require('./routes/auth');
+const { requireAuth } = require('./middleware/auth');
 
 runMigrations();
 
@@ -41,6 +43,8 @@ app.use('/api/', rateLimit({
 }));
 
 // Rotas da API
+app.use('/api/auth', authRouter);
+app.use('/api', requireAuth);
 app.use('/api/animais', animaisRouter);
 app.use('/api/lotes', lotesRouter);
 app.use('/api/rebanho', rebanhoRouter);

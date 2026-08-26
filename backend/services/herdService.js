@@ -61,15 +61,15 @@ function distribuicao(campo, itens) {
   return Object.entries(map).map(([nome, quantidade]) => ({ nome, quantidade }));
 }
 
-async function getRebanho(filtros = {}) {
-  const cotacao = await priceService.getPrecoArroba();
+async function getRebanho(filtros = {}, fazendaId) {
+  const cotacao = await priceService.getPrecoArroba(fazendaId);
   let sql = `
     SELECT a.*, l.nome AS lote_nome
     FROM animal a
     JOIN lote l ON l.id = a.lote_id
-    WHERE 1=1
+    WHERE l.fazenda_id = ?
   `;
-  const params = [];
+  const params = [fazendaId];
 
   if (filtros.lote_id) {
     sql += ' AND a.lote_id = ?';
@@ -118,11 +118,11 @@ async function getRebanho(filtros = {}) {
   };
 }
 
-async function getLoteAgregado(loteId) {
-  const lote = db.prepare('SELECT * FROM lote WHERE id = ?').get(loteId);
+async function getLoteAgregado(loteId, fazendaId) {
+  const lote = db.prepare('SELECT * FROM lote WHERE id = ? AND fazenda_id = ?').get(loteId, fazendaId);
   if (!lote) return null;
 
-  const cotacao = await priceService.getPrecoArroba();
+  const cotacao = await priceService.getPrecoArroba(fazendaId);
   const animais = db
     .prepare('SELECT * FROM animal WHERE lote_id = ? ORDER BY id_brinco')
     .all(loteId);
@@ -203,19 +203,19 @@ async function getLoteAgregado(loteId) {
   };
 }
 
-async function getAnimalFicha(animalId) {
+async function getAnimalFicha(animalId, fazendaId) {
   const animal = db
     .prepare(`
       SELECT a.*, l.nome AS lote_nome, l.id AS lote_id_ref
       FROM animal a
       JOIN lote l ON l.id = a.lote_id
-      WHERE a.id = ?
+      WHERE a.id = ? AND l.fazenda_id = ?
     `)
-    .get(animalId);
+    .get(animalId, fazendaId);
 
   if (!animal) return null;
 
-  const cotacao = await priceService.getPrecoArroba();
+  const cotacao = await priceService.getPrecoArroba(fazendaId);
   const pesagens = getPesagensAnimal(animalId);
   const ultimaPesagem = pesagens.length ? pesagens[pesagens.length - 1] : null;
   const idadeMeses = calcularIdadeMeses(animal.data_nascimento, animal.idade_estimada_meses);

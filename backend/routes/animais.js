@@ -19,7 +19,7 @@ router.get('/', async (req, res, next) => {
       lote_id: req.query.lote_id ? parseInt(req.query.lote_id, 10) : undefined,
       sexo: req.query.sexo,
     };
-    const data = await herdService.getRebanho(filtros);
+    const data = await herdService.getRebanho(filtros, req.fazenda.id);
     res.json(data);
   } catch (err) {
     next(err);
@@ -29,7 +29,7 @@ router.get('/', async (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
   try {
     const id = validatePositiveInteger(req.params.id, 'id');
-    const ficha = await herdService.getAnimalFicha(id);
+    const ficha = await herdService.getAnimalFicha(id, req.fazenda.id);
     if (!ficha) return res.status(404).json({ erro: 'Animal não encontrado' });
     res.json(ficha);
   } catch (err) {
@@ -67,7 +67,8 @@ router.post('/', (req, res, next) => {
     const pesoInicialValidado = peso_kg == null || peso_kg === '' ? null : require('../utils/validation').validatePesoKg(peso_kg);
     validateIdadeOuNascimento(dataNascimentoValidada, idadeEstimadaValidada);
 
-    ensureRecordExists(db, 'lote', loteIdValidado, 'lote_id');
+    const lote = db.prepare('SELECT id FROM lote WHERE id = ? AND fazenda_id = ?').get(loteIdValidado, req.fazenda.id);
+    if (!lote) return res.status(404).json({ erro: 'lote_id não encontrado' });
 
     const transaction = db.transaction(() => {
       const result = db
@@ -90,7 +91,10 @@ router.post('/', (req, res, next) => {
 
     const result = transaction();
 
-    const animal = db.prepare('SELECT * FROM animal WHERE id = ?').get(result.lastInsertRowid);
+    const animal = db.prepare(`
+      SELECT a.* FROM animal a JOIN lote l ON l.id = a.lote_id
+      WHERE a.id = ? AND l.fazenda_id = ?
+    `).get(result.lastInsertRowid, req.fazenda.id);
     res.status(201).json({
       ...animal,
       idade_meses: calcularIdadeMeses(animal.data_nascimento, animal.idade_estimada_meses),
@@ -112,7 +116,10 @@ router.post('/', (req, res, next) => {
 router.put('/:id', (req, res, next) => {
   try {
     const id = validatePositiveInteger(req.params.id, 'id');
-    const existing = db.prepare('SELECT * FROM animal WHERE id = ?').get(id);
+    const existing = db.prepare(`
+      SELECT a.* FROM animal a JOIN lote l ON l.id = a.lote_id
+      WHERE a.id = ? AND l.fazenda_id = ?
+    `).get(id, req.fazenda.id);
     if (!existing) return res.status(404).json({ erro: 'Animal não encontrado' });
 
     const {
@@ -134,7 +141,8 @@ router.put('/:id', (req, res, next) => {
     const idadeEstimadaValidada = idade_estimada_meses == null ? null : validatePositiveInteger(idade_estimada_meses, 'idade_estimada_meses');
     validateIdadeOuNascimento(dataNascimentoValidada, idadeEstimadaValidada);
 
-    ensureRecordExists(db, 'lote', loteIdValidado, 'lote_id');
+    const lote = db.prepare('SELECT id FROM lote WHERE id = ? AND fazenda_id = ?').get(loteIdValidado, req.fazenda.id);
+    if (!lote) return res.status(404).json({ erro: 'lote_id não encontrado' });
 
     db.prepare(`
       UPDATE animal SET
@@ -147,7 +155,10 @@ router.put('/:id', (req, res, next) => {
       condicaoValidada, dataEntradaValidada, loteIdValidado, id
     );
 
-    const animal = db.prepare('SELECT * FROM animal WHERE id = ?').get(id);
+    const animal = db.prepare(`
+      SELECT a.* FROM animal a JOIN lote l ON l.id = a.lote_id
+      WHERE a.id = ? AND l.fazenda_id = ?
+    `).get(id, req.fazenda.id);
     res.json({
       ...animal,
       idade_meses: calcularIdadeMeses(animal.data_nascimento, animal.idade_estimada_meses),

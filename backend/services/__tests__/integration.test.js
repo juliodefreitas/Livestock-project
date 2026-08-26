@@ -11,8 +11,18 @@ process.env.NODE_ENV = 'test';
 process.env.CORS_ORIGIN = 'http://localhost:3000';
 
 const app = require('../../server');
+const bcrypt = require('bcryptjs');
+const { db } = require('../../db/database');
+const { createSession } = require('../../middleware/auth');
 
-function request(method, url, body) {
+const testFarm = db.prepare('INSERT INTO fazenda (cnpj, nome, senha_hash) VALUES (?, ?, ?)').run(
+  '04252011000110',
+  'Fazenda de Teste',
+  bcrypt.hashSync('senha-segura-123', 4),
+);
+const authToken = createSession(Number(testFarm.lastInsertRowid));
+
+function request(method, url, body, token = authToken) {
   return new Promise((resolve, reject) => {
     const server = app.listen(0, () => {
       const port = server.address().port;
@@ -21,7 +31,7 @@ function request(method, url, body) {
         port,
         path: url,
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       };
 
       const req = require('http').request(options, (res) => {
@@ -35,6 +45,7 @@ function request(method, url, body) {
           } catch (e) {
             parsed = data;
           }
+
           resolve({ status: res.statusCode, body: parsed });
         });
       });
@@ -56,6 +67,25 @@ test('GET /api/health retorna 200', async () => {
   const res = await request('GET', '/api/health');
   assert.equal(res.status, 200);
   assert.equal(res.body.status, 'ok');
+});
+
+test('Autenticação protege dados e isola fazendas', async () => {
+  const unauthenticated = await request('GET', '/api/lotes', null, null);
+  assert.equal(unauthenticated.status, 401);
+
+  const secretLote = await request('POST', '/api/lotes', { nome: 'Lote Privado' });
+  assert.equal(secretLote.status, 201);
+
+  const secondFarm = await request('POST', '/api/auth/cadastro', {
+    cnpj: '12345678000195',
+    nome: 'Outra Fazenda',
+    senha: 'senha-segura-456',
+  }, null);
+  assert.equal(secondFarm.status, 201);
+
+  const otherFarmLotes = await request('GET', '/api/lotes', null, secondFarm.body.token);
+  assert.equal(otherFarmLotes.status, 200);
+  assert.equal(otherFarmLotes.body.some((lote) => lote.nome === 'Lote Privado'), false);
 });
 
 test('Criação e listagem de lote', async () => {

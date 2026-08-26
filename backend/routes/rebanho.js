@@ -8,7 +8,7 @@ router.get('/', async (req, res, next) => {
       lote_id: req.query.lote_id ? parseInt(req.query.lote_id, 10) : undefined,
       sexo: req.query.sexo,
     };
-    const data = await herdService.getRebanho(filtros);
+    const data = await herdService.getRebanho(filtros, req.fazenda.id);
     res.json(data);
   } catch (err) {
     next(err);

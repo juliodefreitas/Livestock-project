@@ -6,7 +6,16 @@ const { ValidationError, validateDateField } = require('../utils/validation');
 
 router.get('/arroba', async (req, res, next) => {
   try {
-    const cotacao = await priceService.getPrecoArroba();
+    const cotacao = await priceService.getPrecoArroba(req.fazenda.id);
+    res.json(cotacao);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/sincronizar', async (req, res, next) => {
+  try {
+    const cotacao = await priceService.getPrecoArroba(req.fazenda.id, true);
     res.json(cotacao);
   } catch (err) {
     next(err);
@@ -22,7 +31,7 @@ router.post('/arroba', (req, res, next) => {
     }
 
     const dataReferenciaValidada = validateDateField(data_referencia || new Date().toISOString().split('T')[0], 'data_referencia');
-    const result = priceService.setPrecoManual(precoNumerico, dataReferenciaValidada);
+    const result = priceService.setPrecoManual(precoNumerico, dataReferenciaValidada, req.fazenda.id);
     res.status(201).json(result);
   } catch (err) {
     if (err instanceof ValidationError) {

@@ -60,6 +60,35 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: 2,
+    name: '002_fazendas_e_sessoes',
+    up: () => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS fazenda (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          cnpj TEXT NOT NULL UNIQUE,
+          nome TEXT NOT NULL,
+          senha_hash TEXT NOT NULL,
+          ativo INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS sessao_fazenda (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          fazenda_id INTEGER NOT NULL REFERENCES fazenda(id) ON DELETE CASCADE,
+          token_hash TEXT NOT NULL UNIQUE,
+          expires_at TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        ALTER TABLE lote ADD COLUMN fazenda_id INTEGER REFERENCES fazenda(id);
+        ALTER TABLE cotacao_arroba ADD COLUMN fazenda_id INTEGER REFERENCES fazenda(id);
+        CREATE INDEX IF NOT EXISTS idx_lote_fazenda ON lote(fazenda_id);
+        CREATE INDEX IF NOT EXISTS idx_cotacao_fazenda ON cotacao_arroba(fazenda_id);
+        CREATE INDEX IF NOT EXISTS idx_sessao_token ON sessao_fazenda(token_hash);
+      `);
+    },
+  },
 ];
 
 function getAppliedMigrations() {
