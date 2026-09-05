@@ -49,6 +49,13 @@ function calcularGMD(pesagens) {
   return Math.round((ganho / dias) * 1000) / 1000;
 }
 
+function precoPorCategoria(cotacao, categoria) {
+  if (cotacao?.categorias && categoria && cotacao.categorias[categoria]?.preco) {
+    return cotacao.categorias[categoria].preco;
+  }
+  return cotacao?.preco || 340.0;
+}
+
 function enriquecerAnimal(animal, ultimaPesagem, precoArroba, categoria, extras = {}) {
   const idadeMeses = calcularIdadeMeses(animal.data_nascimento, animal.idade_estimada_meses);
   const pesoKg = ultimaPesagem?.peso_kg ?? null;
@@ -60,6 +67,7 @@ function enriquecerAnimal(animal, ultimaPesagem, precoArroba, categoria, extras 
     peso_atual_kg: pesoKg,
     peso_atual_arrobas: pesoArrobas,
     pode_vender_matadouro: podeVenderMatadouro(animal.sexo, pesoArrobas),
+    preco_arroba_aplicado: precoArroba,
     valor_estimado: calcularValorEstimado(pesoArrobas, precoArroba),
     categoria: categoria ?? null,
     ultima_pesagem: ultimaPesagem?.data_pesagem ?? null,
@@ -75,4 +83,5 @@ module.exports = {
   calcularGMD,
   enriquecerAnimal,
   podeVenderMatadouro,
+  precoPorCategoria,
 };

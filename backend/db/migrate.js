@@ -89,6 +89,27 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: 3,
+    name: '003_cria_ao_pe_e_cotacoes_categoria',
+    up: () => {
+      db.exec(`
+        ALTER TABLE animal ADD COLUMN mae_id INTEGER REFERENCES animal(id) ON DELETE SET NULL;
+        CREATE INDEX IF NOT EXISTS idx_animal_mae ON animal(mae_id);
+
+        CREATE TABLE IF NOT EXISTS cotacao_categoria (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          categoria TEXT NOT NULL,
+          preco REAL NOT NULL CHECK (preco > 0),
+          fonte TEXT NOT NULL DEFAULT 'manual',
+          data_referencia TEXT NOT NULL,
+          fazenda_id INTEGER REFERENCES fazenda(id),
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_cotacao_cat_fazenda ON cotacao_categoria(fazenda_id, categoria);
+      `);
+    },
+  },
 ];
 
 function getAppliedMigrations() {

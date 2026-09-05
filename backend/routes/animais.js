@@ -52,6 +52,7 @@ router.post('/', (req, res, next) => {
       data_entrada,
       lote_id,
       peso_kg,
+      mae_id,
     } = req.body;
 
     if (!id_brinco || !raca) {
@@ -62,6 +63,7 @@ router.post('/', (req, res, next) => {
     const condicaoValidada = validateCondicaoReprodutiva(condicao_reprodutiva);
     const dataEntradaValidada = validateDateField(data_entrada, 'data_entrada');
     const loteIdValidado = validatePositiveInteger(lote_id, 'lote_id');
+    const maeIdValidado = mae_id ? validatePositiveInteger(mae_id, 'mae_id') : null;
     const dataNascimentoValidada = data_nascimento ? validateDateField(data_nascimento, 'data_nascimento') : null;
     const idadeEstimadaValidada = idade_estimada_meses == null ? null : validatePositiveInteger(idade_estimada_meses, 'idade_estimada_meses');
     const pesoInicialValidado = peso_kg == null || peso_kg === '' ? null : require('../utils/validation').validatePesoKg(peso_kg);
@@ -70,20 +72,37 @@ router.post('/', (req, res, next) => {
     const lote = db.prepare('SELECT id FROM lote WHERE id = ? AND fazenda_id = ?').get(loteIdValidado, req.fazenda.id);
     if (!lote) return res.status(404).json({ erro: 'lote_id não encontrado' });
 
+    if (maeIdValidado) {
+      const mae = db.prepare(`
+        SELECT a.id, a.sexo, a.lote_id FROM animal a JOIN lote l ON l.id = a.lote_id
+        WHERE a.id = ? AND l.fazenda_id = ?
+      `).get(maeIdValidado, req.fazenda.id);
+      if (!mae) return res.status(404).json({ erro: 'Vaca/mãe não encontrada nesta fazenda' });
+      if (mae.sexo !== 'femea') return res.status(400).json({ erro: 'A mãe informada deve ser uma fêmea' });
+    }
+
     const transaction = db.transaction(() => {
       const result = db
         .prepare(`
-        INSERT INTO animal (id_brinco, raca, sexo, data_nascimento, idade_estimada_meses, condicao_reprodutiva, data_entrada, lote_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO animal (id_brinco, raca, sexo, data_nascimento, idade_estimada_meses, condicao_reprodutiva, data_entrada, lote_id, mae_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
         .run(
           id_brinco, raca, sexoValidado, dataNascimentoValidada,
-          idadeEstimadaValidada, condicaoValidada, dataEntradaValidada, loteIdValidado
+          idadeEstimadaValidada, condicaoValidada, dataEntradaValidada, loteIdValidado, maeIdValidado
         );
 
       if (pesoInicialValidado != null) {
         db.prepare('INSERT INTO pesagem (animal_id, peso_kg, data_pesagem, origem) VALUES (?, ?, ?, ?)')
           .run(result.lastInsertRowid, pesoInicialValidado, dataEntradaValidada, 'manual');
+      }
+
+      // Se informou mãe, podemos atualizar a condição reprodutiva da mãe para 'com_cria_ao_pe' se estiver vazia
+      if (maeIdValidado) {
+        db.prepare(`
+          UPDATE animal SET condicao_reprodutiva = 'com_cria_ao_pe', updated_at = datetime('now')
+          WHERE id = ? AND (condicao_reprodutiva IS NULL OR condicao_reprodutiva IN ('vazia', 'prenha'))
+        `).run(maeIdValidado);
       }
 
       return result;
@@ -131,28 +150,43 @@ router.put('/:id', (req, res, next) => {
       condicao_reprodutiva = existing.condicao_reprodutiva,
       data_entrada = existing.data_entrada,
       lote_id = existing.lote_id,
+      mae_id = existing.mae_id,
     } = req.body;
 
     const sexoValidado = validateSexo(sexo);
     const condicaoValidada = validateCondicaoReprodutiva(condicao_reprodutiva);
     const dataEntradaValidada = validateDateField(data_entrada, 'data_entrada');
     const loteIdValidado = validatePositiveInteger(lote_id, 'lote_id');
+    const maeIdValidado = mae_id ? validatePositiveInteger(mae_id, 'mae_id') : null;
     const dataNascimentoValidada = data_nascimento ? validateDateField(data_nascimento, 'data_nascimento') : null;
     const idadeEstimadaValidada = idade_estimada_meses == null ? null : validatePositiveInteger(idade_estimada_meses, 'idade_estimada_meses');
     validateIdadeOuNascimento(dataNascimentoValidada, idadeEstimadaValidada);
 
+    if (maeIdValidado === id) {
+      return res.status(400).json({ erro: 'Um animal não pode ser mãe de si mesmo' });
+    }
+
     const lote = db.prepare('SELECT id FROM lote WHERE id = ? AND fazenda_id = ?').get(loteIdValidado, req.fazenda.id);
     if (!lote) return res.status(404).json({ erro: 'lote_id não encontrado' });
+
+    if (maeIdValidado) {
+      const mae = db.prepare(`
+        SELECT a.id, a.sexo FROM animal a JOIN lote l ON l.id = a.lote_id
+        WHERE a.id = ? AND l.fazenda_id = ?
+      `).get(maeIdValidado, req.fazenda.id);
+      if (!mae) return res.status(404).json({ erro: 'Vaca/mãe não encontrada nesta fazenda' });
+      if (mae.sexo !== 'femea') return res.status(400).json({ erro: 'A mãe informada deve ser uma fêmea' });
+    }
 
     db.prepare(`
       UPDATE animal SET
         id_brinco = ?, raca = ?, sexo = ?, data_nascimento = ?,
         idade_estimada_meses = ?, condicao_reprodutiva = ?,
-        data_entrada = ?, lote_id = ?, updated_at = datetime('now')
+        data_entrada = ?, lote_id = ?, mae_id = ?, updated_at = datetime('now')
       WHERE id = ?
     `).run(
       id_brinco, raca, sexoValidado, dataNascimentoValidada, idadeEstimadaValidada,
-      condicaoValidada, dataEntradaValidada, loteIdValidado, id
+      condicaoValidada, dataEntradaValidada, loteIdValidado, maeIdValidado, id
     );
 
     const animal = db.prepare(`
@@ -172,6 +206,46 @@ router.put('/:id', (req, res, next) => {
     }
     if (err.message.includes('not found')) {
       return res.status(404).json({ erro: err.message });
+    }
+    next(err);
+  }
+});
+
+router.post('/:id/vincular-cria', (req, res, next) => {
+  try {
+    const maeId = validatePositiveInteger(req.params.id, 'id');
+    const criaId = validatePositiveInteger(req.body.cria_id, 'cria_id');
+
+    const mae = db.prepare(`
+      SELECT a.* FROM animal a JOIN lote l ON l.id = a.lote_id
+      WHERE a.id = ? AND l.fazenda_id = ?
+    `).get(maeId, req.fazenda.id);
+    if (!mae) return res.status(404).json({ erro: 'Vaca não encontrada' });
+    if (mae.sexo !== 'femea') return res.status(400).json({ erro: 'Apenas fêmeas podem ser associadas como mãe' });
+
+    const cria = db.prepare(`
+      SELECT a.* FROM animal a JOIN lote l ON l.id = a.lote_id
+      WHERE a.id = ? AND l.fazenda_id = ?
+    `).get(criaId, req.fazenda.id);
+    if (!cria) return res.status(404).json({ erro: 'Bezerro(a) não encontrado(a)' });
+    if (cria.id === mae.id) return res.status(400).json({ erro: 'Um animal não pode ser cria de si mesmo' });
+
+    db.transaction(() => {
+      db.prepare(`
+        UPDATE animal SET mae_id = ?, updated_at = datetime('now')
+        WHERE id = ?
+      `).run(maeId, criaId);
+
+      db.prepare(`
+        UPDATE animal SET condicao_reprodutiva = 'com_cria_ao_pe', updated_at = datetime('now')
+        WHERE id = ?
+      `).run(maeId);
+    })();
+
+    res.json({ mensagem: 'Cria associada com sucesso à vaca', mae_id: maeId, cria_id: criaId });
+  } catch (err) {
+    if (err instanceof ValidationError) {
+      return res.status(400).json({ erro: err.message });
     }
     next(err);
   }

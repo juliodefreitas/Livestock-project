@@ -270,6 +270,54 @@ test('Consulta e inserção de cotação', async () => {
   });
   assert.equal(inserida.status, 201);
   assert.equal(inserida.body.preco, 300);
+
+  const inseridaCat = await request('POST', '/api/cotacao/arroba', {
+    preco: 360,
+    categoria: 'Bezerro',
+    data_referencia: '2025-06-01',
+  });
+  assert.equal(inseridaCat.status, 201);
+  assert.equal(inseridaCat.body.categoria, 'Bezerro');
+
+  const cotacoesCat = await request('GET', '/api/cotacao/categorias');
+  assert.equal(cotacoesCat.status, 200);
+  assert.equal(cotacoesCat.body['Bezerro'].preco, 360);
+});
+
+test('Associação de vaca com cria no pé', async () => {
+  const lote = await request('POST', '/api/lotes', { nome: 'Lote Maternidade' });
+  const vaca = await request('POST', '/api/animais', {
+    id_brinco: 'VACA-MATRIZ-01',
+    raca: 'Nelore',
+    sexo: 'femea',
+    data_nascimento: '2020-01-01',
+    condicao_reprodutiva: 'com_cria_ao_pe',
+    data_entrada: '2025-01-01',
+    lote_id: lote.body.id,
+  });
+  assert.equal(vaca.status, 201);
+
+  const bezerro = await request('POST', '/api/animais', {
+    id_brinco: 'BEZERRO-01',
+    raca: 'Nelore',
+    sexo: 'macho',
+    data_nascimento: '2025-06-01',
+    data_entrada: '2025-06-01',
+    lote_id: lote.body.id,
+    mae_id: vaca.body.id,
+  });
+  assert.equal(bezerro.status, 201);
+  assert.equal(bezerro.body.mae_id, vaca.body.id);
+
+  const fichaVaca = await request('GET', `/api/animais/${vaca.body.id}`);
+  assert.equal(fichaVaca.status, 200);
+  assert.ok(fichaVaca.body.crias && fichaVaca.body.crias.length > 0);
+  assert.equal(fichaVaca.body.crias[0].id_brinco, 'BEZERRO-01');
+
+  const vinculo = await request('POST', `/api/animais/${vaca.body.id}/vincular-cria`, {
+    cria_id: bezerro.body.id,
+  });
+  assert.equal(vinculo.status, 200);
 });
 
 test('Respostas 404 para entidades inexistentes', async () => {

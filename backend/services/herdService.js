@@ -1,5 +1,5 @@
 const { db } = require('../db/database');
-const { calcularIdadeMeses, kgParaArrobas, calcularValorEstimado, calcularGMD, enriquecerAnimal } = require('./calculationService');
+const { calcularIdadeMeses, kgParaArrobas, calcularValorEstimado, calcularGMD, enriquecerAnimal, precoPorCategoria } = require('./calculationService');
 const { classificarAnimal } = require('./classificationService');
 const priceService = require('./priceService');
 
@@ -52,6 +52,25 @@ function getUltimasPesagensPorAnimalIds(animalIds) {
   return map;
 }
 
+function getCriasPorMaeIds(maeIds) {
+  if (!maeIds.length) return {};
+  const placeholders = maeIds.map(() => '?').join(',');
+  const rows = db
+    .prepare(`
+      SELECT id, id_brinco, raca, sexo, data_nascimento, mae_id, lote_id
+      FROM animal
+      WHERE mae_id IN (${placeholders})
+    `)
+    .all(...maeIds);
+
+  const map = {};
+  for (const row of rows) {
+    if (!map[row.mae_id]) map[row.mae_id] = [];
+    map[row.mae_id].push(row);
+  }
+  return map;
+}
+
 function distribuicao(campo, itens) {
   const map = {};
   for (const item of itens) {
@@ -64,9 +83,11 @@ function distribuicao(campo, itens) {
 async function getRebanho(filtros = {}, fazendaId) {
   const cotacao = await priceService.getPrecoArroba(fazendaId);
   let sql = `
-    SELECT a.*, l.nome AS lote_nome
+    SELECT a.*, l.nome AS lote_nome,
+           mae.id_brinco AS mae_brinco
     FROM animal a
     JOIN lote l ON l.id = a.lote_id
+    LEFT JOIN animal mae ON mae.id = a.mae_id
     WHERE l.fazenda_id = ?
   `;
   const params = [fazendaId];
@@ -90,10 +111,12 @@ async function getRebanho(filtros = {}, fazendaId) {
   const animalIds = animais.map(a => a.id);
   const ultimasPesagensMap = getUltimasPesagensPorAnimalIds(animalIds);
   const todasPesagensMap = getPesagensPorAnimalIds(animalIds);
+  const criasMap = getCriasPorMaeIds(animalIds);
 
   const enriquecidos = animais.map(animal => {
     const ultimaPesagem = ultimasPesagensMap[animal.id] || null;
     const pesagens = todasPesagensMap[animal.id] || [];
+    const crias = criasMap[animal.id] || [];
     const idadeMeses = calcularIdadeMeses(animal.data_nascimento, animal.idade_estimada_meses);
     const pesoArrobas = kgParaArrobas(ultimaPesagem?.peso_kg);
     const { categoria } = classificarAnimal({
@@ -103,7 +126,12 @@ async function getRebanho(filtros = {}, fazendaId) {
       pesoArrobas,
     });
 
-    return enriquecerAnimal(animal, ultimaPesagem, cotacao.preco, categoria, { pesagens_count: pesagens.length });
+    const precoArroba = precoPorCategoria(cotacao, categoria);
+    return enriquecerAnimal(animal, ultimaPesagem, precoArroba, categoria, {
+      pesagens_count: pesagens.length,
+      crias: crias.map((c) => ({ id: c.id, id_brinco: c.id_brinco, raca: c.raca, sexo: c.sexo, lote_id: c.lote_id })),
+      cria_ao_pe: crias.length > 0 ? crias[0] : null,
+    });
   });
 
   return {
@@ -124,7 +152,12 @@ async function getLoteAgregado(loteId, fazendaId) {
 
   const cotacao = await priceService.getPrecoArroba(fazendaId);
   const animais = db
-    .prepare('SELECT * FROM animal WHERE lote_id = ? ORDER BY id_brinco')
+    .prepare(`
+      SELECT a.*, mae.id_brinco AS mae_brinco
+      FROM animal a
+      LEFT JOIN animal mae ON mae.id = a.mae_id
+      WHERE a.lote_id = ? ORDER BY a.id_brinco
+    `)
     .all(loteId);
 
   if (!animais.length) {
@@ -146,6 +179,7 @@ async function getLoteAgregado(loteId, fazendaId) {
   const animalIds = animais.map(a => a.id);
   const ultimasPesagensMap = getUltimasPesagensPorAnimalIds(animalIds);
   const todasPesagensMap = getPesagensPorAnimalIds(animalIds);
+  const criasMap = getCriasPorMaeIds(animalIds);
 
   const enriquecidos = [];
   let somaPesoKg = 0;
@@ -157,6 +191,7 @@ async function getLoteAgregado(loteId, fazendaId) {
   for (const animal of animais) {
     const ultimaPesagem = ultimasPesagensMap[animal.id] || null;
     const pesagens = todasPesagensMap[animal.id] || [];
+    const crias = criasMap[animal.id] || [];
     const idadeMeses = calcularIdadeMeses(animal.data_nascimento, animal.idade_estimada_meses);
     const pesoArrobas = kgParaArrobas(ultimaPesagem?.peso_kg);
     const { categoria } = classificarAnimal({
@@ -166,7 +201,11 @@ async function getLoteAgregado(loteId, fazendaId) {
       pesoArrobas,
     });
 
-    const enriched = enriquecerAnimal(animal, ultimaPesagem, cotacao.preco, categoria);
+    const precoArroba = precoPorCategoria(cotacao, categoria);
+    const enriched = enriquecerAnimal(animal, ultimaPesagem, precoArroba, categoria, {
+      crias: crias.map((c) => ({ id: c.id, id_brinco: c.id_brinco, raca: c.raca, sexo: c.sexo, lote_id: c.lote_id })),
+      cria_ao_pe: crias.length > 0 ? crias[0] : null,
+    });
     enriquecidos.push(enriched);
 
     if (ultimaPesagem) {
@@ -206,14 +245,22 @@ async function getLoteAgregado(loteId, fazendaId) {
 async function getAnimalFicha(animalId, fazendaId) {
   const animal = db
     .prepare(`
-      SELECT a.*, l.nome AS lote_nome, l.id AS lote_id_ref
+      SELECT a.*, l.nome AS lote_nome, l.id AS lote_id_ref,
+             mae.id_brinco AS mae_brinco, mae.raca AS mae_raca
       FROM animal a
       JOIN lote l ON l.id = a.lote_id
+      LEFT JOIN animal mae ON mae.id = a.mae_id
       WHERE a.id = ? AND l.fazenda_id = ?
     `)
     .get(animalId, fazendaId);
 
   if (!animal) return null;
+
+  const crias = db.prepare(`
+    SELECT id, id_brinco, raca, sexo, data_nascimento, data_entrada, lote_id
+    FROM animal
+    WHERE mae_id = ?
+  `).all(animalId);
 
   const cotacao = await priceService.getPrecoArroba(fazendaId);
   const pesagens = getPesagensAnimal(animalId);
@@ -227,6 +274,7 @@ async function getAnimalFicha(animalId, fazendaId) {
     pesoArrobas,
   });
 
+  const precoArroba = precoPorCategoria(cotacao, classificacao.categoria);
   const historicoPeso = pesagens.map((p) => ({
     data: p.data_pesagem,
     peso_kg: p.peso_kg,
@@ -234,11 +282,16 @@ async function getAnimalFicha(animalId, fazendaId) {
   }));
 
   return {
-    ...enriquecerAnimal(animal, ultimaPesagem, cotacao.preco, classificacao.categoria),
+    ...enriquecerAnimal(animal, ultimaPesagem, precoArroba, classificacao.categoria, {
+      crias,
+      cria_ao_pe: crias.length > 0 ? crias[0] : null,
+      mae: animal.mae_id ? { id: animal.mae_id, id_brinco: animal.mae_brinco, raca: animal.mae_raca } : null,
+    }),
     classificacao,
     gmd: calcularGMD(pesagens),
     historico_peso: historicoPeso,
     cotacao,
+    preco_arroba_aplicado: precoArroba,
     aviso_arroba: 'Peso em arrobas (@) calculado com base em peso vivo (1 @ = 15 kg). Distinto da arroba de carcaça.',
   };
 }

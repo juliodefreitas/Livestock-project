@@ -78,10 +78,11 @@ export default function App() {
   const [notice, setNotice] = useState(null);
   const [online, setOnline] = useState(navigator.onLine);
   const [loteForm, setLoteForm] = useState({ nome: '', descricao: '' });
-  const [animalForm, setAnimalForm] = useState({ id_brinco: '', raca: '', sexo: 'macho', data_nascimento: '', lote_id: '', data_entrada: today, condicao_reprodutiva: '', peso_kg: '' });
+  const [animalForm, setAnimalForm] = useState({ id_brinco: '', raca: '', sexo: 'macho', data_nascimento: '', lote_id: '', data_entrada: today, condicao_reprodutiva: '', peso_kg: '', mae_id: '' });
   const [weightForm, setWeightForm] = useState({ animal_id: '', peso_kg: '', data_pesagem: today });
   const [transferForm, setTransferForm] = useState({ animal_id: '', lote_id: '' });
-  const [cotacaoForm, setCotacaoForm] = useState({ preco: '' });
+  const [vincularCriaForm, setVincularCriaForm] = useState({ mae_id: '', cria_id: '' });
+  const [cotacaoForm, setCotacaoForm] = useState({ preco: '', categoria: 'Boi gordo' });
   const [syncingCotacao, setSyncingCotacao] = useState(false);
   const [hardwareStatus, setHardwareStatus] = useState('Hardware não configurado.');
   const [hardwareBusy, setHardwareBusy] = useState(false);
@@ -137,6 +138,14 @@ export default function App() {
     if (animals.length) {
       setWeightForm((current) => current.animal_id ? current : { ...current, animal_id: String(animals[0].id) });
       setTransferForm((current) => current.animal_id ? current : { ...current, animal_id: String(animals[0].id) });
+      const vacas = animals.filter((a) => a.sexo === 'femea');
+      const possiveisCrias = animals.filter((a) => (a.idade_meses == null || a.idade_meses <= 12) || a.categoria?.includes('Bezer'));
+      if (vacas.length && !vincularCriaForm.mae_id) {
+        setVincularCriaForm((c) => ({ ...c, mae_id: String(vacas[0].id) }));
+      }
+      if (possiveisCrias.length && !vincularCriaForm.cria_id) {
+        setVincularCriaForm((c) => ({ ...c, cria_id: String(possiveisCrias[0].id) }));
+      }
     }
   }, [data]);
 
@@ -167,11 +176,12 @@ export default function App() {
       const payload = {
         ...animalForm,
         lote_id: Number(animalForm.lote_id),
+        mae_id: animalForm.mae_id ? Number(animalForm.mae_id) : undefined,
         condicao_reprodutiva: animalForm.condicao_reprodutiva || null,
         peso_kg: animalForm.peso_kg ? Number(animalForm.peso_kg) : undefined,
       };
       await request('/animais', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      setAnimalForm({ id_brinco: '', raca: '', sexo: 'macho', data_nascimento: '', lote_id: animalForm.lote_id, data_entrada: today, condicao_reprodutiva: '', peso_kg: '' });
+      setAnimalForm({ id_brinco: '', raca: '', sexo: 'macho', data_nascimento: '', lote_id: animalForm.lote_id, data_entrada: today, condicao_reprodutiva: '', peso_kg: '', mae_id: '' });
       setLoteId(String(payload.lote_id));
       await refresh('Animal cadastrado com sucesso.');
     } catch (error) { setNotice({ type: 'error', text: error.message }); }
@@ -194,20 +204,40 @@ export default function App() {
     } catch (error) { setNotice({ type: 'error', text: error.message }); }
   };
 
+  const submitVincularCria = async (event) => {
+    event.preventDefault();
+    if (!vincularCriaForm.mae_id || !vincularCriaForm.cria_id) {
+      setNotice({ type: 'error', text: 'Selecione a vaca e o bezerro(a) para vincular.' });
+      return;
+    }
+    try {
+      await request(`/animais/${vincularCriaForm.mae_id}/vincular-cria`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cria_id: Number(vincularCriaForm.cria_id) }),
+      });
+      await refresh('Cria vinculada com sucesso à vaca (condição atualizada para Cria ao pé).');
+    } catch (error) { setNotice({ type: 'error', text: error.message }); }
+  };
+
   const syncMarketPrice = async () => {
     setSyncingCotacao(true);
     try {
       const result = await request('/cotacao/sincronizar', { method: 'POST' });
-      await refresh(`Cotação CEPEA sincronizada: ${money(result.preco)} (@)`);
+      await refresh(`Cotação CEPEA sincronizada ao vivo: ${money(result.preco)} (@)`);
     } catch (error) { setNotice({ type: 'error', text: error.message }); } finally { setSyncingCotacao(false); }
   };
 
   const submitCotacao = async (event) => {
     event.preventDefault();
     try {
-      await request('/cotacao/arroba', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ preco: Number(cotacaoForm.preco) }) });
-      setCotacaoForm({ preco: '' });
-      await refresh('Cotação manual cadastrada com sucesso.');
+      await request('/cotacao/arroba', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preco: Number(cotacaoForm.preco), categoria: cotacaoForm.categoria }),
+      });
+      setCotacaoForm((c) => ({ ...c, preco: '' }));
+      await refresh(`Cotação manual para ${cotacaoForm.categoria} cadastrada com sucesso.`);
     } catch (error) { setNotice({ type: 'error', text: error.message }); }
   };
 
@@ -302,24 +332,206 @@ function Dashboard({ metrics, distributions, performance }) {
   const { totalWeight, weighed, totalValue, animals, data } = metrics;
   const sexTotal = (distributions.sexo || []).reduce((sum, item) => sum + Number(item.quantidade), 0);
   const trend = performance.map((item) => ({ x: item.periodo, y: item.valor }));
+  const cotacoesCategorias = data.cotacao?.categorias ? Object.entries(data.cotacao.categorias) : [];
+
   return <div className="dashboard">
-    <section className="metrics"><Metric label="Animais no filtro" value={data.total} detail="Registros ativos" /><Metric label="Peso médio" value={`${number(weighed.length ? totalWeight / weighed.length : 0)} kg`} detail={`${weighed.length} com peso atualizado`} /><Metric label="Valor estimado" value={money(totalValue)} detail="Valor consolidado" /><Metric label="Cotação da arroba" value={money(data.cotacao?.preco)} detail={data.cotacao?.fonte || 'Sem fonte'} /></section>
-    <section className="panel"><div className="section-heading"><div><span className="eyebrow">INDICADORES</span><h2>Resumo do lote</h2></div></div><div className="indicator-grid"><Metric label="Peso registrado" value={`${number((weighed.length / animals.length) * 100)}%`} detail={`${weighed.length} de ${animals.length} animais`} /><Metric label="Classificados" value={`${animals.filter((animal) => animal.categoria).length}`} detail="Com categoria definida" /><Metric label="Valor médio" value={money(totalValue / animals.length)} detail="Por animal" /></div></section>
-    <section className="charts"><div className="panel chart"><h2>Raças</h2><Bar data={chartData(distributions.raca || [], 'Animais por raça')} options={{ ...chartOptions, plugins: { legend: { display: false } } }} /></div><div className="panel chart"><h2>Categorias</h2><Doughnut data={chartData(distributions.categoria || [], 'Distribuição por categoria')} options={chartOptions} /></div><div className="panel sex-card"><h2>Composição por sexo</h2>{(distributions.sexo || []).map((item) => <div className="sex-row" key={item.nome}><span>{item.nome}</span><strong>{number((Number(item.quantidade) / sexTotal) * 100)}%</strong><small>{item.quantidade} animais</small></div>)}</div></section>
+    <section className="metrics">
+      <Metric label="Animais no filtro" value={data.total} detail="Registros ativos" />
+      <Metric label="Peso médio" value={`${number(weighed.length ? totalWeight / weighed.length : 0)} kg`} detail={`${weighed.length} com peso atualizado`} />
+      <Metric label="Valor estimado total" value={money(totalValue)} detail="Calculado por categoria" />
+      <Metric label="Boi Gordo (Ref. CEPEA)" value={money(data.cotacao?.preco)} detail={data.cotacao?.fonte || 'Sem fonte'} />
+    </section>
+
+    {cotacoesCategorias.length > 0 && (
+      <section className="panel cotacoes-panel">
+        <div className="section-heading">
+          <div>
+            <span className="eyebrow">MERCADO AO VIVO</span>
+            <h2>Cotações por Categoria (@)</h2>
+          </div>
+          <span className="muted">{data.cotacao?.data_referencia ? `Ref: ${data.cotacao.data_referencia}` : ''}</span>
+        </div>
+        <div className="cotacoes-grid">
+          {cotacoesCategorias.map(([catNome, catInfo]) => (
+            <div className="cotacao-item" key={catNome}>
+              <span className="cotacao-nome">{catNome}</span>
+              <strong>{money(catInfo.preco)}</strong>
+              <small title={catInfo.fonte}>{catInfo.fonte}</small>
+            </div>
+          ))}
+        </div>
+      </section>
+    )}
+
+    <section className="panel"><div className="section-heading"><div><span className="eyebrow">INDICADORES</span><h2>Resumo do lote</h2></div></div><div className="indicator-grid"><Metric label="Peso registrado" value={`${number((weighed.length / animals.length) * 100)}%`} detail={`${weighed.length} de ${animals.length} animais`} /><Metric label="Classificados" value={`${animals.filter((animal) => animal.categoria).length}`} detail="Com categoria definida" /><Metric label="Valor médio" value={money(totalValue / (animals.length || 1))} detail="Por animal" /></div></section>
+    <section className="charts"><div className="panel chart"><h2>Raças</h2><Bar data={chartData(distributions.raca || [], 'Animais por raça')} options={{ ...chartOptions, plugins: { legend: { display: false } } }} /></div><div className="panel chart"><h2>Categorias</h2><Doughnut data={chartData(distributions.categoria || [], 'Distribuição por categoria')} options={chartOptions} /></div><div className="panel sex-card"><h2>Composição por sexo</h2>{(distributions.sexo || []).map((item) => <div className="sex-row" key={item.nome}><span>{item.nome}</span><strong>{number((Number(item.quantidade) / (sexTotal || 1)) * 100)}%</strong><small>{item.quantidade} animais</small></div>)}</div></section>
     <section className="panel chart wide-chart"><h2>Evolução de peso do lote</h2>{trend.length ? <Line data={{ labels: trend.map((item) => item.x), datasets: [{ label: 'Peso médio (kg)', data: trend.map((item) => item.y), borderColor: '#176b4d', backgroundColor: 'rgba(23, 107, 77, 0.12)', fill: true, tension: 0.35 }] }} options={chartOptions} /> : <p className="muted">Selecione um lote com histórico de pesagens para visualizar a evolução.</p>}</section>
-    <section className="panel table-panel"><div className="section-heading"><div><span className="eyebrow">REBANHO</span><h2>Animais do lote</h2></div><span>{animals.length} registros</span></div><div className="table-scroll"><table><thead><tr><th>Brinco</th><th>Raça</th><th>Sexo</th><th>Idade</th><th>Categoria</th><th>Peso atual</th><th>Valor estimado</th></tr></thead><tbody>{animals.map((animal) => <tr key={animal.id}><td><b>{animal.id_brinco}</b></td><td>{animal.raca}</td><td>{animal.sexo}</td><td>{animal.idade_meses ?? '—'} meses</td><td><span className="tag">{animal.categoria || 'Sem categoria'}</span></td><td>{animal.peso_atual_kg != null ? `${number(animal.peso_atual_kg)} kg` : '—'}</td><td>{money(animal.valor_estimado)}</td></tr>)}</tbody></table></div></section>
+    <section className="panel table-panel">
+      <div className="section-heading"><div><span className="eyebrow">REBANHO</span><h2>Animais do lote</h2></div><span>{animals.length} registros</span></div>
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Brinco</th>
+              <th>Raça</th>
+              <th>Sexo</th>
+              <th>Idade</th>
+              <th>Categoria</th>
+              <th>Peso atual</th>
+              <th>Cria / Vínculo</th>
+              <th>Cotação / @</th>
+              <th>Valor estimado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {animals.map((animal) => (
+              <tr key={animal.id}>
+                <td><b>{animal.id_brinco}</b></td>
+                <td>{animal.raca}</td>
+                <td>{animal.sexo}</td>
+                <td>{animal.idade_meses ?? '—'} meses</td>
+                <td><span className="tag">{animal.categoria || 'Sem categoria'}</span></td>
+                <td>{animal.peso_atual_kg != null ? `${number(animal.peso_atual_kg)} kg` : '—'}</td>
+                <td>
+                  {animal.cria_ao_pe ? (
+                    <span className="cria-tag" title={`Cria: Brinco ${animal.cria_ao_pe.id_brinco}`}>🍼 Cria: {animal.cria_ao_pe.id_brinco}</span>
+                  ) : animal.mae_brinco ? (
+                    <span className="mae-tag" title={`Mãe: Brinco ${animal.mae_brinco}`}>🐮 Mãe: {animal.mae_brinco}</span>
+                  ) : (
+                    '—'
+                  )}
+                </td>
+                <td>{money(animal.preco_arroba_aplicado)}</td>
+                <td><strong>{money(animal.valor_estimado)}</strong></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   </div>;
 }
 
 function Operations(props) {
-  const { lotes, animals, loteForm, setLoteForm, animalForm, setAnimalForm, weightForm, setWeightForm, transferForm, setTransferForm, submitLote, submitAnimal, submitWeight, submitTransfer, hardwareStatus, hardwareBusy, configureHardware, autoWeigh, cotacaoForm, setCotacaoForm, submitCotacao, syncMarketPrice, syncingCotacao, currentCotacao } = props;
+  const {
+    lotes,
+    animals,
+    loteForm,
+    setLoteForm,
+    animalForm,
+    setAnimalForm,
+    weightForm,
+    setWeightForm,
+    transferForm,
+    setTransferForm,
+    vincularCriaForm,
+    setVincularCriaForm,
+    submitLote,
+    submitAnimal,
+    submitWeight,
+    submitTransfer,
+    submitVincularCria,
+    hardwareStatus,
+    hardwareBusy,
+    configureHardware,
+    autoWeigh,
+    cotacaoForm,
+    setCotacaoForm,
+    submitCotacao,
+    syncMarketPrice,
+    syncingCotacao,
+    currentCotacao
+  } = props;
   const update = (setter, field) => (event) => setter((current) => ({ ...current, [field]: event.target.value }));
-  return <section className="operations"><div className="section-heading"><div><span className="eyebrow">OPERAÇÃO</span><h2>Cadastros e manejo</h2></div><p>Registre as movimentações sem sair do painel.</p></div><div className="operation-grid">
-    <form className="operation-card" onSubmit={submitLote}><h3>Novo lote</h3><Field label="Nome do lote"><input required value={loteForm.nome} onChange={update(setLoteForm, 'nome')} placeholder="Ex.: Confinamento C" /></Field><Field label="Descrição"><input value={loteForm.descricao} onChange={update(setLoteForm, 'descricao')} placeholder="Ex.: Novilhas em recria" /></Field><button className="primary">Salvar lote</button></form>
-    <form className="operation-card" onSubmit={submitAnimal}><h3>Novo animal</h3><div className="compact-fields"><Field label="Brinco"><input required value={animalForm.id_brinco} onChange={update(setAnimalForm, 'id_brinco')} /></Field><Field label="Raça"><input required value={animalForm.raca} onChange={update(setAnimalForm, 'raca')} /></Field><Field label="Sexo"><select value={animalForm.sexo} onChange={update(setAnimalForm, 'sexo')}><option value="macho">Macho</option><option value="femea">Fêmea</option></select></Field><Field label="Lote"><select required value={animalForm.lote_id} onChange={update(setAnimalForm, 'lote_id')}>{lotes.length === 0 ? <option value="">Cadastre um lote primeiro</option> : lotes.map((lote) => <option key={lote.id} value={lote.id}>{lote.nome}</option>)}</select></Field><Field label="Data de nascimento"><input required type="date" value={animalForm.data_nascimento} onChange={update(setAnimalForm, 'data_nascimento')} /></Field><Field label="Data de entrada"><input required type="date" value={animalForm.data_entrada} onChange={update(setAnimalForm, 'data_entrada')} /></Field><Field label="Condição reprodutiva"><select value={animalForm.condicao_reprodutiva} onChange={update(setAnimalForm, 'condicao_reprodutiva')}><option value="">Não informar</option><option value="inteiro">Inteiro</option><option value="castrado">Castrado</option><option value="vazia">Vazia</option><option value="prenha">Prenha</option><option value="com_cria_ao_pe">Com cria ao pé</option></select></Field><Field label="Peso inicial (kg)"><input type="number" min="50" max="2000" step="0.1" value={animalForm.peso_kg} onChange={update(setAnimalForm, 'peso_kg')} /></Field></div><button className="primary">Salvar animal</button></form>
-    <form className="operation-card" onSubmit={submitWeight}><h3>Pesagem manual</h3><Field label="Animal"><select required value={weightForm.animal_id} onChange={update(setWeightForm, 'animal_id')}>{animals.length === 0 ? <option value="">Nenhum animal no lote</option> : animals.map((animal) => <option key={animal.id} value={animal.id}>{animal.id_brinco} · {animal.raca}</option>)}</select></Field><Field label="Peso (kg)"><input required type="number" min="0.1" step="0.1" value={weightForm.peso_kg} onChange={update(setWeightForm, 'peso_kg')} /></Field><Field label="Data"><input required type="date" value={weightForm.data_pesagem} onChange={update(setWeightForm, 'data_pesagem')} /></Field><button className="primary">Registrar peso</button></form>
-    <form className="operation-card" onSubmit={submitTransfer}><h3>Transferir animal</h3><Field label="Animal"><select required value={transferForm.animal_id} onChange={update(setTransferForm, 'animal_id')}>{animals.length === 0 ? <option value="">Nenhum animal disponível</option> : animals.map((animal) => <option key={animal.id} value={animal.id}>{animal.id_brinco} · {animal.raca}</option>)}</select></Field><Field label="Novo lote"><select required value={transferForm.lote_id} onChange={update(setTransferForm, 'lote_id')}>{lotes.length === 0 ? <option value="">Nenhum lote cadastrado</option> : lotes.map((lote) => <option key={lote.id} value={lote.id}>{lote.nome}</option>)}</select></Field><button className="secondary">Transferir</button></form>
-    <article className="operation-card"><h3>Cotação de mercado (@)</h3><p>Cotação atual: <strong>{currentCotacao?.preco ? money(currentCotacao.preco) : '—'}</strong> ({currentCotacao?.fonte || 'CEPEA/Esalq'})</p><div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}><button type="button" className="primary" disabled={syncingCotacao} onClick={syncMarketPrice}>{syncingCotacao ? 'Consultando mercado...' : 'Sincronizar CEPEA ao vivo'}</button></div><form onSubmit={submitCotacao}><Field label="Definir preço manual (R$/@)"><input required type="number" min="1" step="0.01" value={cotacaoForm.preco} onChange={update(setCotacaoForm, 'preco')} placeholder="Ex.: 345.50" /></Field><button className="secondary">Salvar cotação manual</button></form></article>
-    <article className="operation-card hardware"><h3>Pesagem automática</h3><p>Use a câmera para identificar o brinco e a balança conectada para registrar o peso estável.</p><div className="hardware-status">{hardwareStatus}</div><button className="secondary" disabled={hardwareBusy} onClick={configureHardware}>Configurar hardware</button><button className="primary" disabled={hardwareBusy} onClick={autoWeigh}>{hardwareBusy ? 'Processando...' : 'Iniciar pesagem'}</button></article>
-  </div></section>;
+
+  const vacas = animals.filter((a) => a.sexo === 'femea');
+  const bezerrada = animals.filter((a) => a.idade_meses == null || a.idade_meses <= 12 || a.categoria?.includes('Bezer'));
+
+  return <section className="operations">
+    <div className="section-heading"><div><span className="eyebrow">OPERAÇÃO</span><h2>Cadastros e manejo</h2></div><p>Registre as movimentações sem sair do painel.</p></div>
+    <div className="operation-grid">
+      <form className="operation-card" onSubmit={submitLote}>
+        <h3>Novo lote</h3>
+        <Field label="Nome do lote"><input required value={loteForm.nome} onChange={update(setLoteForm, 'nome')} placeholder="Ex.: Confinamento C" /></Field>
+        <Field label="Descrição"><input value={loteForm.descricao} onChange={update(setLoteForm, 'descricao')} placeholder="Ex.: Novilhas em recria" /></Field>
+        <button className="primary">Salvar lote</button>
+      </form>
+
+      <form className="operation-card" onSubmit={submitAnimal}>
+        <h3>Novo animal</h3>
+        <div className="compact-fields">
+          <Field label="Brinco"><input required value={animalForm.id_brinco} onChange={update(setAnimalForm, 'id_brinco')} /></Field>
+          <Field label="Raça"><input required value={animalForm.raca} onChange={update(setAnimalForm, 'raca')} /></Field>
+          <Field label="Sexo"><select value={animalForm.sexo} onChange={update(setAnimalForm, 'sexo')}><option value="macho">Macho</option><option value="femea">Fêmea</option></select></Field>
+          <Field label="Lote"><select required value={animalForm.lote_id} onChange={update(setAnimalForm, 'lote_id')}>{lotes.length === 0 ? <option value="">Cadastre um lote primeiro</option> : lotes.map((lote) => <option key={lote.id} value={lote.id}>{lote.nome}</option>)}</select></Field>
+          <Field label="Data de nascimento"><input required type="date" value={animalForm.data_nascimento} onChange={update(setAnimalForm, 'data_nascimento')} /></Field>
+          <Field label="Data de entrada"><input required type="date" value={animalForm.data_entrada} onChange={update(setAnimalForm, 'data_entrada')} /></Field>
+          <Field label="Condição reprodutiva"><select value={animalForm.condicao_reprodutiva} onChange={update(setAnimalForm, 'condicao_reprodutiva')}><option value="">Não informar</option><option value="inteiro">Inteiro</option><option value="castrado">Castrado</option><option value="vazia">Vazia</option><option value="prenha">Prenha</option><option value="com_cria_ao_pe">Com cria ao pé</option></select></Field>
+          <Field label="Vaca mãe (se for cria)"><select value={animalForm.mae_id} onChange={update(setAnimalForm, 'mae_id')}><option value="">Nenhuma / Sem mãe</option>{vacas.map((vaca) => <option key={vaca.id} value={vaca.id}>{vaca.id_brinco} · {vaca.raca}</option>)}</select></Field>
+          <Field label="Peso inicial (kg)"><input type="number" min="50" max="2000" step="0.1" value={animalForm.peso_kg} onChange={update(setAnimalForm, 'peso_kg')} /></Field>
+        </div>
+        <button className="primary">Salvar animal</button>
+      </form>
+
+      <form className="operation-card" onSubmit={submitVincularCria}>
+        <h3>🍼 Vincular Cria à Vaca</h3>
+        <p>Associe uma vaca com cria ao pé com o bezerro(a) correspondente no lote.</p>
+        <Field label="Vaca (Mãe)"><select required value={vincularCriaForm.mae_id} onChange={update(setVincularCriaForm, 'mae_id')}>{vacas.length === 0 ? <option value="">Nenhuma fêmea no lote</option> : vacas.map((vaca) => <option key={vaca.id} value={vaca.id}>{vaca.id_brinco} · {vaca.raca}</option>)}</select></Field>
+        <Field label="Bezerro(a) (Cria)"><select required value={vincularCriaForm.cria_id} onChange={update(setVincularCriaForm, 'cria_id')}>{bezerrada.length === 0 ? <option value="">Nenhuma cria disponível</option> : bezerrada.map((cria) => <option key={cria.id} value={cria.id}>{cria.id_brinco} · {cria.raca} ({cria.sexo})</option>)}</select></Field>
+        <button className="primary">Vincular Par Mãe-Cria</button>
+      </form>
+
+      <form className="operation-card" onSubmit={submitWeight}>
+        <h3>Pesagem manual</h3>
+        <Field label="Animal"><select required value={weightForm.animal_id} onChange={update(setWeightForm, 'animal_id')}>{animals.length === 0 ? <option value="">Nenhum animal no lote</option> : animals.map((animal) => <option key={animal.id} value={animal.id}>{animal.id_brinco} · {animal.raca}</option>)}</select></Field>
+        <Field label="Peso (kg)"><input required type="number" min="0.1" step="0.1" value={weightForm.peso_kg} onChange={update(setWeightForm, 'peso_kg')} /></Field>
+        <Field label="Data"><input required type="date" value={weightForm.data_pesagem} onChange={update(setWeightForm, 'data_pesagem')} /></Field>
+        <button className="primary">Registrar peso</button>
+      </form>
+
+      <form className="operation-card" onSubmit={submitTransfer}>
+        <h3>Transferir animal</h3>
+        <Field label="Animal"><select required value={transferForm.animal_id} onChange={update(setTransferForm, 'animal_id')}>{animals.length === 0 ? <option value="">Nenhum animal disponível</option> : animals.map((animal) => <option key={animal.id} value={animal.id}>{animal.id_brinco} · {animal.raca}</option>)}</select></Field>
+        <Field label="Novo lote"><select required value={transferForm.lote_id} onChange={update(setTransferForm, 'lote_id')}>{lotes.length === 0 ? <option value="">Nenhum lote cadastrado</option> : lotes.map((lote) => <option key={lote.id} value={lote.id}>{lote.nome}</option>)}</select></Field>
+        <button className="secondary">Transferir</button>
+      </form>
+
+      <article className="operation-card">
+        <h3>Cotação de mercado (@)</h3>
+        <p>Boi Gordo CEPEA: <strong>{currentCotacao?.preco ? money(currentCotacao.preco) : '—'}</strong></p>
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+          <button type="button" className="primary" disabled={syncingCotacao} onClick={syncMarketPrice}>
+            {syncingCotacao ? 'Consultando mercado...' : 'Sincronizar Mercado ao Vivo'}
+          </button>
+        </div>
+        <form onSubmit={submitCotacao}>
+          <Field label="Categoria da Cotação">
+            <select value={cotacaoForm.categoria} onChange={update(setCotacaoForm, 'categoria')}>
+              <option value="Boi gordo">Boi gordo (Padrão)</option>
+              <option value="Vaca gorda">Vaca gorda</option>
+              <option value="Vaca">Vaca</option>
+              <option value="Novilha">Novilha</option>
+              <option value="Novilho">Novilho</option>
+              <option value="Bezerro">Bezerro</option>
+              <option value="Bezerra">Bezerra</option>
+              <option value="Garrote">Garrote</option>
+              <option value="Touro">Touro</option>
+            </select>
+          </Field>
+          <Field label="Definir preço manual (R$/@)">
+            <input required type="number" min="1" step="0.01" value={cotacaoForm.preco} onChange={update(setCotacaoForm, 'preco')} placeholder="Ex.: 345.50" />
+          </Field>
+          <button className="secondary">Salvar cotação da categoria</button>
+        </form>
+      </article>
+
+      <article className="operation-card hardware">
+        <h3>Pesagem automática</h3>
+        <p>Use a câmera para identificar o brinco e a balança conectada para registrar o peso estável.</p>
+        <div className="hardware-status">{hardwareStatus}</div>
+        <button className="secondary" disabled={hardwareBusy} onClick={configureHardware}>Configurar hardware</button>
+        <button className="primary" disabled={hardwareBusy} onClick={autoWeigh}>{hardwareBusy ? 'Processando...' : 'Iniciar pesagem'}</button>
+      </article>
+    </div>
+  </section>;
 }

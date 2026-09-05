@@ -24,19 +24,28 @@ router.post('/sincronizar', async (req, res, next) => {
 
 router.post('/arroba', (req, res, next) => {
   try {
-    const { preco, data_referencia } = req.body;
+    const { preco, data_referencia, categoria } = req.body;
     const precoNumerico = Number(preco);
     if (!Number.isFinite(precoNumerico) || precoNumerico <= 0) {
       return res.status(400).json({ erro: 'preco deve ser um número maior que zero' });
     }
 
     const dataReferenciaValidada = validateDateField(data_referencia || new Date().toISOString().split('T')[0], 'data_referencia');
-    const result = priceService.setPrecoManual(precoNumerico, dataReferenciaValidada, req.fazenda.id);
+    const result = priceService.setPrecoManual(precoNumerico, dataReferenciaValidada, req.fazenda.id, categoria || null);
     res.status(201).json(result);
   } catch (err) {
     if (err instanceof ValidationError) {
       return res.status(400).json({ erro: err.message });
     }
+    next(err);
+  }
+});
+
+router.get('/categorias', async (req, res, next) => {
+  try {
+    const cotacao = await priceService.getPrecoArroba(req.fazenda.id);
+    res.json(cotacao.categorias || {});
+  } catch (err) {
     next(err);
   }
 });
