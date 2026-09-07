@@ -33,8 +33,7 @@ async function request(path, options) {
   try {
     const response = await fetch(`${apiBase}${path}`, {
       ...options,
-      headers: { ...(options?.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    });
+      headers: { ...(options?.headers || {}), ...(token ? { Authorization: "Bearer " + token } : {}) },});
     const data = await response.json().catch(() => ({}));
     if (response.status === 401) {
       localStorage.removeItem('pecuaria.token');
