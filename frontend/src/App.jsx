@@ -17,7 +17,7 @@ import AuthScreen from './AuthScreen';
 ChartJS.register(ArcElement, BarElement, CategoryScale, Filler, Legend, LineElement, LinearScale, PointElement, Tooltip);
 
 const apiBase = '/api';
-const palette = ['#176b4d', '#32936f', '#7abf9d', '#bedfca', '#e6a84a', '#5a82c8', '#d8665e'];
+const palette = ['#1b7a54', '#2e9d72', '#62bc93', '#a7ddc4', '#e2a13c', '#487fc5', '#db5858'];
 const today = new Date().toISOString().slice(0, 10);
 
 const money = (value) => value == null ? '-' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -31,17 +31,20 @@ const chartOptions = { responsive: true, maintainAspectRatio: false, plugins: { 
 async function request(path, options) {
   const token = localStorage.getItem('pecuaria.token');
   try {
+    const headers = { ...(options?.headers || {}) };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
     const response = await fetch(`${apiBase}${path}`, {
       ...options,
-      headers: { ...(options?.headers || {}), ...(token ? { Authorization: "Bearer " + token } : {}) },});
-    const data = await response.json().catch(() => ({}));
+      headers,
+    });
+    const resData = await response.json().catch(() => ({}));
     if (response.status === 401) {
       localStorage.removeItem('pecuaria.token');
       localStorage.removeItem('pecuaria.fazenda');
       window.dispatchEvent(new Event('pecuaria:logout'));
     }
-    if (!response.ok) throw new Error(data.erro || data.message || `Erro na requisição (${response.status})`);
-    return data;
+    if (!response.ok) throw new Error(resData.erro || resData.message || `Erro na requisição (${response.status})`);
+    return resData;
   } catch (error) {
     if (error.message === 'Failed to fetch') {
       throw new Error('Falha de conexão com o servidor. Verifique se o backend está em execução.');
@@ -50,17 +53,37 @@ async function request(path, options) {
   }
 }
 
-function Metric({ label, value, detail }) {
-  return <article className="metric"><p>{label}</p><strong>{value}</strong><span>{detail}</span></article>;
+function Metric({ label, value, detail, icon }) {
+  return (
+    <article className="metric-card">
+      <div className="metric-head">
+        <span className="metric-label">{label}</span>
+        {icon && <span className="metric-icon">{icon}</span>}
+      </div>
+      <strong className="metric-value">{value}</strong>
+      {detail && <span className="metric-detail">{detail}</span>}
+    </article>
+  );
 }
 
 function Notice({ notice, onClose }) {
   if (!notice) return null;
-  return <div className={`notice ${notice.type}`} role="status">{notice.text}<button onClick={onClose} aria-label="Fechar mensagem">×</button></div>;
+  return (
+    <div className={`notice ${notice.type}`} role="status">
+      <span>{notice.text}</span>
+      <button onClick={onClose} aria-label="Fechar mensagem">×</button>
+    </div>
+  );
 }
 
-function Field({ label, children }) {
-  return <label className="field"><span>{label}</span>{children}</label>;
+function Field({ label, children, hint }) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      {children}
+      {hint && <small className="field-hint">{hint}</small>}
+    </label>
+  );
 }
 
 export default function App() {
@@ -69,13 +92,18 @@ export default function App() {
     const fazenda = localStorage.getItem('pecuaria.fazenda');
     return token && fazenda ? { token, fazenda: JSON.parse(fazenda) } : null;
   });
-  const [view, setView] = useState('home');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [lotes, setLotes] = useState([]);
   const [loteId, setLoteId] = useState('');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState(null);
   const [online, setOnline] = useState(navigator.onLine);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterSexo, setFilterSexo] = useState('');
+  const [quickModal, setQuickModal] = useState(null);
+
+  // Formulários
   const [loteForm, setLoteForm] = useState({ nome: '', descricao: '' });
   const [animalForm, setAnimalForm] = useState({ id_brinco: '', raca: '', sexo: 'macho', data_nascimento: '', lote_id: '', data_entrada: today, condicao_reprodutiva: '', peso_kg: '', mae_id: '' });
   const [weightForm, setWeightForm] = useState({ animal_id: '', peso_kg: '', data_pesagem: today });
@@ -83,7 +111,7 @@ export default function App() {
   const [vincularCriaForm, setVincularCriaForm] = useState({ mae_id: '', cria_id: '' });
   const [cotacaoForm, setCotacaoForm] = useState({ preco: '', categoria: 'Boi gordo' });
   const [syncingCotacao, setSyncingCotacao] = useState(false);
-  const [hardwareStatus, setHardwareStatus] = useState('Hardware não configurado.');
+  const [hardwareStatus, setHardwareStatus] = useState('Hardware pronto para conexão.');
   const [hardwareBusy, setHardwareBusy] = useState(false);
 
   const animals = data?.animais || [];
@@ -130,8 +158,8 @@ export default function App() {
   }, [auth]);
 
   useEffect(() => {
-    if (auth && view === 'dashboard') loadDashboard();
-  }, [auth, view, loteId]);
+    if (auth) loadDashboard();
+  }, [auth, loteId]);
 
   useEffect(() => {
     if (animals.length) {
@@ -161,6 +189,7 @@ export default function App() {
       setLoteId(String(created.id));
       setAnimalForm((current) => ({ ...current, lote_id: current.lote_id || String(created.id) }));
       setTransferForm((current) => ({ ...current, lote_id: current.lote_id || String(created.id) }));
+      setQuickModal(null);
       await refresh('Lote cadastrado com sucesso.');
     } catch (error) { setNotice({ type: 'error', text: error.message }); }
   };
@@ -182,6 +211,7 @@ export default function App() {
       await request('/animais', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       setAnimalForm({ id_brinco: '', raca: '', sexo: 'macho', data_nascimento: '', lote_id: animalForm.lote_id, data_entrada: today, condicao_reprodutiva: '', peso_kg: '', mae_id: '' });
       setLoteId(String(payload.lote_id));
+      setQuickModal(null);
       await refresh('Animal cadastrado com sucesso.');
     } catch (error) { setNotice({ type: 'error', text: error.message }); }
   };
@@ -191,6 +221,7 @@ export default function App() {
     try {
       await request('/pesagens', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...weightForm, animal_id: Number(weightForm.animal_id), peso_kg: Number(weightForm.peso_kg), origem: 'manual' }) });
       setWeightForm((current) => ({ ...current, peso_kg: '' }));
+      setQuickModal(null);
       await refresh('Pesagem manual registrada.');
     } catch (error) { setNotice({ type: 'error', text: error.message }); }
   };
@@ -199,6 +230,7 @@ export default function App() {
     event.preventDefault();
     try {
       await request(`/animais/${transferForm.animal_id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lote_id: Number(transferForm.lote_id) }) });
+      setQuickModal(null);
       await refresh('Animal transferido para o novo lote.');
     } catch (error) { setNotice({ type: 'error', text: error.message }); }
   };
@@ -215,6 +247,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cria_id: Number(vincularCriaForm.cria_id) }),
       });
+      setQuickModal(null);
       await refresh('Cria vinculada com sucesso à vaca (condição atualizada para Cria ao pé).');
     } catch (error) { setNotice({ type: 'error', text: error.message }); }
   };
@@ -262,7 +295,15 @@ export default function App() {
   const totalWeight = animals.filter((animal) => animal.peso_atual_kg != null).reduce((sum, animal) => sum + Number(animal.peso_atual_kg), 0);
   const weighed = animals.filter((animal) => animal.peso_atual_kg != null);
   const totalValue = animals.reduce((sum, animal) => sum + Number(animal.valor_estimado || 0), 0);
-  const performance = aggregateWeighings(data?.pesagens_lote || []);
+  const performance = aggregateWeings(data?.pesagens_lote || []);
+
+  const filteredAnimals = useMemo(() => {
+    return animals.filter((a) => {
+      const matchSearch = !searchTerm || a.id_brinco.toLowerCase().includes(searchTerm.toLowerCase()) || a.raca.toLowerCase().includes(searchTerm.toLowerCase()) || (a.categoria && a.categoria.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchSexo = !filterSexo || a.sexo === filterSexo;
+      return matchSearch && matchSexo;
+    });
+  }, [animals, searchTerm, filterSexo]);
 
   const authenticated = (result) => {
     localStorage.setItem('pecuaria.token', result.token);
@@ -282,39 +323,525 @@ export default function App() {
 
   if (!auth) return <AuthScreen onAuthenticated={authenticated} />;
 
+  const vacasDisponiveis = animals.filter((a) => a.sexo === 'femea');
+  const bezerradaDisponivel = animals.filter((a) => a.idade_meses == null || a.idade_meses <= 12 || a.categoria?.includes('Bezer'));
+
   return (
     <div className="app-shell">
+      {/* Topbar moderna */}
       <header className="topbar">
-        <div className="brand"><span className="brand-mark">PS</span><div><strong>Pecuária Smart</strong><small>{auth.fazenda.nome}</small></div></div>
-        <nav aria-label="Navegação principal">
-          <button className={view === 'home' ? 'active' : ''} onClick={() => setView('home')}>Início</button>
-          <button className={view === 'dashboard' ? 'active' : ''} onClick={() => setView('dashboard')}>Painel</button>
+        <div className="brand">
+          <div className="brand-icon">🐂</div>
+          <div>
+            <strong>Pecuária Smart</strong>
+            <small>{auth.fazenda.nome}</small>
+          </div>
+        </div>
+
+        {/* Abas Principais de Navegação */}
+        <nav className="nav-tabs" aria-label="Navegação do sistema">
+          <button className={activeTab === 'dashboard' ? 'tab-btn active' : 'tab-btn'} onClick={() => setActiveTab('dashboard')}>
+            📊 Painel & Gráficos
+          </button>
+          <button className={activeTab === 'animais' ? 'tab-btn active' : 'tab-btn'} onClick={() => setActiveTab('animais')}>
+            📋 Rebanho ({animals.length})
+          </button>
+          <button className={activeTab === 'operacoes' ? 'tab-btn active' : 'tab-btn'} onClick={() => setActiveTab('operacoes')}>
+            ⚡ Manejo & Lotes
+          </button>
+          <button className={activeTab === 'cotacoes' ? 'tab-btn active' : 'tab-btn'} onClick={() => setActiveTab('cotacoes')}>
+            💰 Cotações de Mercado
+          </button>
         </nav>
-        <span className={`connection ${online ? '' : 'offline'}`}>{online ? 'Online' : 'Modo offline'}</span><button className="logout" onClick={logout}>Sair</button>
+
+        <div className="topbar-actions">
+          <span className={`connection-badge ${online ? 'online' : 'offline'}`}>
+            <span className="dot"></span> {online ? 'Conectado' : 'Offline'}
+          </span>
+          <button className="btn-logout" onClick={logout} title="Sair da conta">Sair</button>
+        </div>
       </header>
 
-      <main>
+      {/* Barra de Ações Rápidas */}
+      <section className="quick-actions-bar">
+        <div className="quick-left">
+          <div className="lote-selector-pill">
+            <span>📍 Lote:</span>
+            <select value={loteId} onChange={(e) => setLoteId(e.target.value)}>
+              <option value="">Todos os lotes ({lotes.length})</option>
+              {lotes.map((lote) => (
+                <option key={lote.id} value={lote.id}>{lote.nome}</option>
+              ))}
+            </select>
+          </div>
+          <button className="btn-refresh" disabled={loading} onClick={() => refresh()}>
+            {loading ? '🔄 Atualizando...' : '🔄 Atualizar'}
+          </button>
+        </div>
+
+        <div className="quick-right">
+          <button className="btn-quick primary" onClick={() => setQuickModal('animal')}>
+            ➕ Novo Animal
+          </button>
+          <button className="btn-quick" onClick={() => setQuickModal('pesagem')}>
+            ⚖️ Nova Pesagem
+          </button>
+          <button className="btn-quick special" onClick={() => setQuickModal('vincular')}>
+            🍼 Vincular Cria
+          </button>
+          <button className="btn-quick" onClick={() => setQuickModal('lote')}>
+            📁 Novo Lote
+          </button>
+        </div>
+      </section>
+
+      <main className="main-content">
         <Notice notice={notice} onClose={() => setNotice(null)} />
-        {view === 'home' ? (
-          <section className="hero">
-            <div className="hero-content"><span className="eyebrow">GESTÃO INTELIGENTE</span><h1>Decisões mais claras para o seu rebanho.</h1><p>Controle lotes, pesagens e valor estimado em uma experiência pensada para o campo, no computador ou no celular.</p><div className="actions"><button className="primary" onClick={() => setView('dashboard')}>Abrir painel</button><a href="#recursos">Conhecer recursos</a></div></div>
-            <div className="hero-summary"><p>Visão operacional</p><strong>{data?.total ?? '—'} <small>animais monitorados</small></strong><div><span>Pesagens</span><b>Atualizadas em tempo real</b></div><div><span>Instalação</span><b>Disponível como aplicativo</b></div></div>
-          </section>
-        ) : (
-          <>
-            <section className="dashboard-heading"><div><span className="eyebrow">PAINEL OPERACIONAL</span><h1>{selectedLote ? selectedLote.nome : 'Visão do rebanho'}</h1><p>Indicadores atualizados para orientar o manejo diário.</p></div><button className="primary" disabled={loading} onClick={() => refresh()}>{loading ? 'Atualizando...' : 'Atualizar dados'}</button></section>
-            <section className="filters panel"><Field label="Visualizar lote"><select value={loteId} onChange={(event) => setLoteId(event.target.value)}><option value="">Todos os lotes</option>{lotes.map((lote) => <option key={lote.id} value={lote.id}>{lote.nome}</option>)}</select></Field><p>Filtre o painel para comparar desempenho, composição e valor de cada lote.</p></section>
-            {loading ? <div className="loading">Atualizando os indicadores...</div> : !data || !animals.length ? <div className="empty"><h2>Nenhum animal encontrado</h2><p>Cadastre um lote e seus animais para começar a acompanhar o rebanho.</p></div> : <Dashboard metrics={{ totalWeight, weighed, totalValue, animals, data }} distributions={distributions} performance={performance} />}
-            <Operations lotes={lotes} animals={animals} loteForm={loteForm} setLoteForm={setLoteForm} animalForm={animalForm} setAnimalForm={setAnimalForm} weightForm={weightForm} setWeightForm={setWeightForm} transferForm={transferForm} setTransferForm={setTransferForm} submitLote={submitLote} submitAnimal={submitAnimal} submitWeight={submitWeight} submitTransfer={submitTransfer} hardwareStatus={hardwareStatus} hardwareBusy={hardwareBusy} configureHardware={configureHardware} autoWeigh={autoWeigh} cotacaoForm={cotacaoForm} setCotacaoForm={setCotacaoForm} submitCotacao={submitCotacao} syncMarketPrice={syncMarketPrice} syncingCotacao={syncingCotacao} currentCotacao={data?.cotacao} />
-          </>
+
+        {/* Modal de Ação Rápida */}
+        {quickModal && (
+          <div className="modal-overlay" onClick={() => setQuickModal(null)}>
+            <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>
+                  {quickModal === 'animal' && '➕ Cadastrar Novo Animal'}
+                  {quickModal === 'pesagem' && '⚖️ Registrar Pesagem'}
+                  {quickModal === 'vincular' && '🍼 Vincular Vaca e Cria ao Pé'}
+                  {quickModal === 'lote' && '📁 Criar Novo Lote'}
+                </h3>
+                <button className="btn-close" onClick={() => setQuickModal(null)}>×</button>
+              </div>
+
+              <div className="modal-body">
+                {quickModal === 'animal' && (
+                  <form onSubmit={submitAnimal}>
+                    <div className="form-grid">
+                      <Field label="Número do Brinco"><input required autoFocus value={animalForm.id_brinco} onChange={(e) => setAnimalForm({ ...animalForm, id_brinco: e.target.value })} placeholder="Ex: BR-104" /></Field>
+                      <Field label="Raça"><input required value={animalForm.raca} onChange={(e) => setAnimalForm({ ...animalForm, raca: e.target.value })} placeholder="Ex: Nelore, Angus" /></Field>
+                      <Field label="Sexo">
+                        <select value={animalForm.sexo} onChange={(e) => setAnimalForm({ ...animalForm, sexo: e.target.value })}>
+                          <option value="macho">Macho</option>
+                          <option value="femea">Fêmea</option>
+                        </select>
+                      </Field>
+                      <Field label="Lote de Destino">
+                        <select required value={animalForm.lote_id} onChange={(e) => setAnimalForm({ ...animalForm, lote_id: e.target.value })}>
+                          {lotes.length === 0 ? <option value="">Cadastre um lote primeiro</option> : lotes.map((l) => <option key={l.id} value={l.id}>{l.nome}</option>)}
+                        </select>
+                      </Field>
+                      <Field label="Data de Nascimento"><input required type="date" value={animalForm.data_nascimento} onChange={(e) => setAnimalForm({ ...animalForm, data_nascimento: e.target.value })} /></Field>
+                      <Field label="Data de Entrada"><input required type="date" value={animalForm.data_entrada} onChange={(e) => setAnimalForm({ ...animalForm, data_entrada: e.target.value })} /></Field>
+                      <Field label="Condição Reprodutiva">
+                        <select value={animalForm.condicao_reprodutiva} onChange={(e) => setAnimalForm({ ...animalForm, condicao_reprodutiva: e.target.value })}>
+                          <option value="">Não informar</option>
+                          <option value="inteiro">Inteiro</option>
+                          <option value="castrado">Castrado</option>
+                          <option value="vazia">Vazia</option>
+                          <option value="prenha">Prenha</option>
+                          <option value="com_cria_ao_pe">Com cria ao pé</option>
+                        </select>
+                      </Field>
+                      <Field label="Vaca Mãe (se for bezerro/cria)">
+                        <select value={animalForm.mae_id} onChange={(e) => setAnimalForm({ ...animalForm, mae_id: e.target.value })}>
+                          <option value="">Nenhuma / Sem mãe vinculada</option>
+                          {vacasDisponiveis.map((v) => <option key={v.id} value={v.id}>{v.id_brinco} · {v.raca}</option>)}
+                        </select>
+                      </Field>
+                      <Field label="Peso Inicial (kg)" hint="Opcional">
+                        <input type="number" min="30" max="2000" step="0.1" value={animalForm.peso_kg} onChange={(e) => setAnimalForm({ ...animalForm, peso_kg: e.target.value })} placeholder="Ex: 180.5" />
+                      </Field>
+                    </div>
+                    <div className="modal-footer">
+                      <button type="button" className="btn-secondary" onClick={() => setQuickModal(null)}>Cancelar</button>
+                      <button type="submit" className="btn-primary">Salvar Animal</button>
+                    </div>
+                  </form>
+                )}
+
+                {quickModal === 'pesagem' && (
+                  <form onSubmit={submitWeight}>
+                    <div className="form-grid">
+                      <Field label="Selecione o Animal">
+                        <select required value={weightForm.animal_id} onChange={(e) => setWeightForm({ ...weightForm, animal_id: e.target.value })}>
+                          {animals.length === 0 ? <option value="">Nenhum animal cadastrado</option> : animals.map((a) => <option key={a.id} value={a.id}>{a.id_brinco} · {a.raca} ({a.sexo})</option>)}
+                        </select>
+                      </Field>
+                      <Field label="Peso Atual (kg)">
+                        <input required autoFocus type="number" min="1" step="0.1" value={weightForm.peso_kg} onChange={(e) => setWeightForm({ ...weightForm, peso_kg: e.target.value })} placeholder="Ex: 485.5" />
+                      </Field>
+                      <Field label="Data da Pesagem">
+                        <input required type="date" value={weightForm.data_pesagem} onChange={(e) => setWeightForm({ ...weightForm, data_pesagem: e.target.value })} />
+                      </Field>
+                    </div>
+                    <div className="modal-footer">
+                      <button type="button" className="btn-secondary" onClick={() => setQuickModal(null)}>Cancelar</button>
+                      <button type="submit" className="btn-primary">Gravar Pesagem</button>
+                    </div>
+                  </form>
+                )}
+
+                {quickModal === 'vincular' && (
+                  <form onSubmit={submitVincularCria}>
+                    <p className="modal-desc">Associe uma matriz (vaca) com seu bezerro ou bezerra no lote para rastreamento de cria ao pé e valorização zootécnica.</p>
+                    <div className="form-grid">
+                      <Field label="Vaca (Matriz)">
+                        <select required value={vincularCriaForm.mae_id} onChange={(e) => setVincularCriaForm({ ...vincularCriaForm, mae_id: e.target.value })}>
+                          {vacasDisponiveis.length === 0 ? <option value="">Nenhuma fêmea cadastrada</option> : vacasDisponiveis.map((v) => <option key={v.id} value={v.id}>{v.id_brinco} · {v.raca}</option>)}
+                        </select>
+                      </Field>
+                      <Field label="Bezerro / Bezerra (Cria)">
+                        <select required value={vincularCriaForm.cria_id} onChange={(e) => setVincularCriaForm({ ...vincularCriaForm, cria_id: e.target.value })}>
+                          {bezerradaDisponivel.length === 0 ? <option value="">Nenhum bezerro disponível</option> : bezerradaDisponivel.map((c) => <option key={c.id} value={c.id}>{c.id_brinco} · {c.raca} ({c.sexo})</option>)}
+                        </select>
+                      </Field>
+                    </div>
+                    <div className="modal-footer">
+                      <button type="button" className="btn-secondary" onClick={() => setQuickModal(null)}>Cancelar</button>
+                      <button type="submit" className="btn-primary special">Vincular Par Mãe-Cria</button>
+                    </div>
+                  </form>
+                )}
+
+                {quickModal === 'lote' && (
+                  <form onSubmit={submitLote}>
+                    <div className="form-grid">
+                      <Field label="Nome do Lote"><input required autoFocus value={loteForm.nome} onChange={(e) => setLoteForm({ ...loteForm, nome: e.target.value })} placeholder="Ex: Confinamento Piquete 1" /></Field>
+                      <Field label="Descrição ou Objetivo"><input value={loteForm.descricao} onChange={(e) => setLoteForm({ ...loteForm, descricao: e.target.value })} placeholder="Ex: Machos Nelore em engorda intensiva" /></Field>
+                    </div>
+                    <div className="modal-footer">
+                      <button type="button" className="btn-secondary" onClick={() => setQuickModal(null)}>Cancelar</button>
+                      <button type="submit" className="btn-primary">Criar Lote</button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            </div>
+          </div>
         )}
-        {view === 'home' && <section id="recursos" className="features"><article><span>01</span><h2>Painel de decisão</h2><p>Visualize peso médio, valor estimado, cotação e classificação em um só lugar.</p></article><article><span>02</span><h2>Rotina simplificada</h2><p>Cadastre lotes, animais e pesagens sem planilhas paralelas.</p></article><article><span>03</span><h2>Pronto para o campo</h2><p>Instale o sistema no dispositivo e acesse a interface mesmo sem conexão.</p></article></section>}
+
+        {/* ============================================================ */}
+        {/* ABA 1: PAINEL & INDICADORES GERAIS */}
+        {/* ============================================================ */}
+        {activeTab === 'dashboard' && (
+          <div className="tab-content">
+            {/* Linha de KPIs Principais */}
+            <section className="metrics-grid">
+              <Metric label="Rebanho Monitorado" value={data?.total ?? '0'} detail={selectedLote ? `Lote ${selectedLote.nome}` : 'Todos os lotes'} icon="🐂" />
+              <Metric label="Peso Médio Atual" value={`${number(weighed.length ? totalWeight / weighed.length : 0)} kg`} detail={`${weighed.length} animais com peso recente`} icon="⚖️" />
+              <Metric label="Patrimônio Estimado Total" value={money(totalValue)} detail="Calculado por categoria e cotação viva" icon="💵" />
+              <Metric label="Boi Gordo CEPEA (@)" value={money(data?.cotacao?.preco)} detail={data?.cotacao?.fonte || 'Referência CEPEA/SP'} icon="📈" />
+            </section>
+
+            {/* Painel de Cotações Rápidas por Categoria */}
+            {data?.cotacao?.categorias && (
+              <section className="panel live-market-panel">
+                <div className="panel-header">
+                  <div>
+                    <span className="tag-pill green">Mercado ao Vivo</span>
+                    <h3>Cotações por Categoria (@)</h3>
+                  </div>
+                  <button className="btn-mini" onClick={syncMarketPrice} disabled={syncingCotacao}>
+                    {syncingCotacao ? 'Atualizando...' : '🔄 Sincronizar Mercado'}
+                  </button>
+                </div>
+                <div className="live-market-grid">
+                  {Object.entries(data.cotacao.categorias).map(([catNome, catInfo]) => (
+                    <div className="market-card" key={catNome}>
+                      <span className="market-cat-title">{catNome}</span>
+                      <strong className="market-cat-price">{money(catInfo.preco)}</strong>
+                      <small className="market-cat-source" title={catInfo.fonte}>{catInfo.fonte}</small>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Gráficos Interativos */}
+            <section className="charts-grid">
+              <div className="panel chart-card">
+                <h3>Distribuição por Raça</h3>
+                <div className="chart-wrapper">
+                  <Bar data={chartData(distributions.raca || [], 'Quantidade')} options={{ ...chartOptions, plugins: { legend: { display: false } } }} />
+                </div>
+              </div>
+
+              <div className="panel chart-card">
+                <h3>Classificação Zootécnica</h3>
+                <div className="chart-wrapper">
+                  <Doughnut data={chartData(distributions.categoria || [], 'Animais')} options={chartOptions} />
+                </div>
+              </div>
+
+              <div className="panel chart-card full-width">
+                <h3>Evolução de Ganho de Peso Médio no Lote (GMD)</h3>
+                <div className="chart-wrapper wide">
+                  {performance.length ? (
+                    <Line
+                      data={{
+                        labels: performance.map((i) => i.periodo),
+                        datasets: [{
+                          label: 'Peso Médio (kg)',
+                          data: performance.map((i) => i.valor),
+                          borderColor: '#1b7a54',
+                          backgroundColor: 'rgba(27, 122, 84, 0.12)',
+                          fill: true,
+                          tension: 0.35,
+                        }],
+                      }}
+                      options={chartOptions}
+                    />
+                  ) : (
+                    <div className="empty-chart-msg">
+                      <p>Registre pesagens ao longo do tempo para visualizar a curva de desempenho.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {/* ============================================================ */}
+        {/* ABA 2: LISTAGEM E TABELA DO REBANHO */}
+        {/* ============================================================ */}
+        {activeTab === 'animais' && (
+          <div className="tab-content">
+            <section className="panel table-container">
+              <div className="table-top-bar">
+                <div className="table-search-box">
+                  <span className="search-icon">🔍</span>
+                  <input
+                    type="text"
+                    placeholder="Buscar por brinco, raça ou categoria..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                  {searchTerm && <button className="clear-search" onClick={() => setSearchTerm('')}>×</button>}
+                </div>
+
+                <div className="table-filter-group">
+                  <select value={filterSexo} onChange={(e) => setFilterSexo(e.target.value)}>
+                    <option value="">Todos os sexos</option>
+                    <option value="macho">Machos</option>
+                    <option value="femea">Fêmeas</option>
+                  </select>
+
+                  <button className="btn-primary" onClick={() => setQuickModal('animal')}>
+                    ➕ Cadastrar Animal
+                  </button>
+                </div>
+              </div>
+
+              <div className="table-responsive">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Brinco</th>
+                      <th>Raça</th>
+                      <th>Sexo</th>
+                      <th>Idade</th>
+                      <th>Categoria Zootécnica</th>
+                      <th>Peso Atual</th>
+                      <th>Família / Vínculo</th>
+                      <th>Cotação Aplicada</th>
+                      <th>Valor Estimado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredAnimals.length === 0 ? (
+                      <tr>
+                        <td colSpan="9" className="empty-table">
+                          <p>Nenhum animal encontrado para os filtros selecionados.</p>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredAnimals.map((animal) => (
+                        <tr key={animal.id}>
+                          <td><strong className="brinco-badge">{animal.id_brinco}</strong></td>
+                          <td>{animal.raca}</td>
+                          <td>
+                            <span className={`sex-badge ${animal.sexo}`}>
+                              {animal.sexo === 'macho' ? '♂ Macho' : '♀ Fêmea'}
+                            </span>
+                          </td>
+                          <td>{animal.idade_meses ?? '—'} m</td>
+                          <td><span className="cat-badge">{animal.categoria || 'Não classificado'}</span></td>
+                          <td><strong>{animal.peso_atual_kg != null ? `${number(animal.peso_atual_kg)} kg` : '—'}</strong></td>
+                          <td>
+                            {animal.cria_ao_pe ? (
+                              <span className="badge-link cria" title={`Bezerro(a) ID: ${animal.cria_ao_pe.id_brinco}`}>
+                                🍼 Cria: {animal.cria_ao_pe.id_brinco}
+                              </span>
+                            ) : animal.mae_brinco ? (
+                              <span className="badge-link mae" title={`Vaca Mãe ID: ${animal.mae_brinco}`}>
+                                🐮 Mãe: {animal.mae_brinco}
+                              </span>
+                            ) : (
+                              <span className="text-muted">—</span>
+                            )}
+                          </td>
+                          <td>{money(animal.preco_arroba_aplicado)} /@</td>
+                          <td><strong className="price-value">{money(animal.valor_estimado)}</strong></td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {/* ============================================================ */}
+        {/* ABA 3: MANEJO & OPERAÇÕES */}
+        {/* ============================================================ */}
+        {activeTab === 'operacoes' && (
+          <div className="tab-content">
+            <div className="operations-grid">
+              {/* Card 1: Vincular Matriz e Bezerro */}
+              <div className="panel op-card highlighted">
+                <div className="card-head">
+                  <span className="card-icon">🍼</span>
+                  <div>
+                    <h3>Vínculo de Cria ao Pé</h3>
+                    <p>Associe vacas com bezerros para controle de lactação e desmame.</p>
+                  </div>
+                </div>
+                <form onSubmit={submitVincularCria}>
+                  <Field label="Vaca (Matriz)">
+                    <select required value={vincularCriaForm.mae_id} onChange={(e) => setVincularCriaForm({ ...vincularCriaForm, mae_id: e.target.value })}>
+                      {vacasDisponiveis.length === 0 ? <option value="">Nenhuma vaca no lote</option> : vacasDisponiveis.map((v) => <option key={v.id} value={v.id}>{v.id_brinco} · {v.raca}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Bezerro / Cria">
+                    <select required value={vincularCriaForm.cria_id} onChange={(e) => setVincularCriaForm({ ...vincularCriaForm, cria_id: e.target.value })}>
+                      {bezerradaDisponivel.length === 0 ? <option value="">Nenhuma cria no lote</option> : bezerradaDisponivel.map((c) => <option key={c.id} value={c.id}>{c.id_brinco} · {c.raca} ({c.sexo})</option>)}
+                    </select>
+                  </Field>
+                  <button className="btn-primary full special">Vincular Par Mãe-Cria</button>
+                </form>
+              </div>
+
+              {/* Card 2: Transferência entre Lotes */}
+              <div className="panel op-card">
+                <div className="card-head">
+                  <span className="card-icon">🚚</span>
+                  <div>
+                    <h3>Transferência de Lote</h3>
+                    <p>Mova animais entre piquetes ou fases de confinamento.</p>
+                  </div>
+                </div>
+                <form onSubmit={submitTransfer}>
+                  <Field label="Animal a Transferir">
+                    <select required value={transferForm.animal_id} onChange={(e) => setTransferForm({ ...transferForm, animal_id: e.target.value })}>
+                      {animals.length === 0 ? <option value="">Nenhum animal disponível</option> : animals.map((a) => <option key={a.id} value={a.id}>{a.id_brinco} · {a.raca}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Lote de Destino">
+                    <select required value={transferForm.lote_id} onChange={(e) => setTransferForm({ ...transferForm, lote_id: e.target.value })}>
+                      {lotes.length === 0 ? <option value="">Nenhum lote cadastrado</option> : lotes.map((l) => <option key={l.id} value={l.id}>{l.nome}</option>)}
+                    </select>
+                  </Field>
+                  <button className="btn-secondary full">Transferir Animal</button>
+                </form>
+              </div>
+
+              {/* Card 3: Pesagem Automática / IoT */}
+              <div className="panel op-card">
+                <div className="card-head">
+                  <span className="card-icon">📷</span>
+                  <div>
+                    <h3>Pesagem com Câmera e Balança</h3>
+                    <p>Integração automática com câmera OCR e balança eletrônica.</p>
+                  </div>
+                </div>
+                <div className="hardware-box">
+                  <p className="status-text">{hardwareStatus}</p>
+                </div>
+                <div className="btn-row">
+                  <button className="btn-secondary" disabled={hardwareBusy} onClick={configureHardware}>Configurar</button>
+                  <button className="btn-primary" disabled={hardwareBusy} onClick={autoWeigh}>
+                    {hardwareBusy ? 'Processando...' : 'Pesagem com Câmera'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================ */}
+        {/* ABA 4: COTAÇÕES E MERCADO */}
+        {/* ============================================================ */}
+        {activeTab === 'cotacoes' && (
+          <div className="tab-content">
+            <div className="cotacoes-layout">
+              <div className="panel cotacao-overview-card">
+                <div className="card-head">
+                  <span className="card-icon">💹</span>
+                  <div>
+                    <h3>Mercado e Precificação da Arroba</h3>
+                    <p>Sincronize com os principais indicadores ou ajuste preços locais para sua fazenda.</p>
+                  </div>
+                </div>
+
+                <div className="sync-banner">
+                  <div>
+                    <strong>Referência Atual: {data?.cotacao?.fonte || 'CEPEA/Esalq'}</strong>
+                    <p>Boi Gordo padrão: <span>{data?.cotacao?.preco ? money(data.cotacao.preco) : '—'}</span></p>
+                  </div>
+                  <button className="btn-primary" disabled={syncingCotacao} onClick={syncMarketPrice}>
+                    {syncingCotacao ? 'Buscando cotações...' : '🔄 Sincronizar Mercado Agora'}
+                  </button>
+                </div>
+
+                <div className="cotacoes-cards-full">
+                  {data?.cotacao?.categorias && Object.entries(data.cotacao.categorias).map(([catNome, catInfo]) => (
+                    <div className="cat-price-row" key={catNome}>
+                      <div className="cat-price-info">
+                        <strong>{catNome}</strong>
+                        <small>{catInfo.fonte}</small>
+                      </div>
+                      <div className="cat-price-val">
+                        <span>{money(catInfo.preco)}</span>
+                        <small>/ arroba (@)</small>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="panel cotacao-form-card">
+                <h3>Definir Cotação Manual</h3>
+                <p>Personalize o valor da arroba para uma categoria específica praticada na sua região.</p>
+                <form onSubmit={submitCotacao}>
+                  <Field label="Categoria de Gado">
+                    <select value={cotacaoForm.categoria} onChange={(e) => setCotacaoForm({ ...cotacaoForm, categoria: e.target.value })}>
+                      <option value="Boi gordo">Boi gordo</option>
+                      <option value="Vaca gorda">Vaca gorda</option>
+                      <option value="Vaca">Vaca</option>
+                      <option value="Novilha">Novilha</option>
+                      <option value="Novilho">Novilho</option>
+                      <option value="Bezerro">Bezerro</option>
+                      <option value="Bezerra">Bezerra</option>
+                      <option value="Garrote">Garrote</option>
+                      <option value="Touro">Touro</option>
+                    </select>
+                  </Field>
+                  <Field label="Preço da Arroba (R$/@)">
+                    <input required type="number" min="1" step="0.01" value={cotacaoForm.preco} onChange={(e) => setCotacaoForm({ ...cotacaoForm, preco: e.target.value })} placeholder="Ex: 340.00" />
+                  </Field>
+                  <button className="btn-primary full">Salvar Cotação da Categoria</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
 }
 
-function aggregateWeighings(weighings) {
+function aggregateWeings(weighings) {
   const periods = new Map();
   for (const weighing of weighings) {
     const date = new Date(weighing.data_pesagem);
@@ -325,212 +852,4 @@ function aggregateWeighings(weighings) {
   return [...periods.entries()]
     .map(([periodo, value]) => ({ periodo, valor: Math.round((value.total / value.count) * 100) / 100 }))
     .sort((a, b) => a.periodo.localeCompare(b.periodo));
-}
-
-function Dashboard({ metrics, distributions, performance }) {
-  const { totalWeight, weighed, totalValue, animals, data } = metrics;
-  const sexTotal = (distributions.sexo || []).reduce((sum, item) => sum + Number(item.quantidade), 0);
-  const trend = performance.map((item) => ({ x: item.periodo, y: item.valor }));
-  const cotacoesCategorias = data.cotacao?.categorias ? Object.entries(data.cotacao.categorias) : [];
-
-  return <div className="dashboard">
-    <section className="metrics">
-      <Metric label="Animais no filtro" value={data.total} detail="Registros ativos" />
-      <Metric label="Peso médio" value={`${number(weighed.length ? totalWeight / weighed.length : 0)} kg`} detail={`${weighed.length} com peso atualizado`} />
-      <Metric label="Valor estimado total" value={money(totalValue)} detail="Calculado por categoria" />
-      <Metric label="Boi Gordo (Ref. CEPEA)" value={money(data.cotacao?.preco)} detail={data.cotacao?.fonte || 'Sem fonte'} />
-    </section>
-
-    {cotacoesCategorias.length > 0 && (
-      <section className="panel cotacoes-panel">
-        <div className="section-heading">
-          <div>
-            <span className="eyebrow">MERCADO AO VIVO</span>
-            <h2>Cotações por Categoria (@)</h2>
-          </div>
-          <span className="muted">{data.cotacao?.data_referencia ? `Ref: ${data.cotacao.data_referencia}` : ''}</span>
-        </div>
-        <div className="cotacoes-grid">
-          {cotacoesCategorias.map(([catNome, catInfo]) => (
-            <div className="cotacao-item" key={catNome}>
-              <span className="cotacao-nome">{catNome}</span>
-              <strong>{money(catInfo.preco)}</strong>
-              <small title={catInfo.fonte}>{catInfo.fonte}</small>
-            </div>
-          ))}
-        </div>
-      </section>
-    )}
-
-    <section className="panel"><div className="section-heading"><div><span className="eyebrow">INDICADORES</span><h2>Resumo do lote</h2></div></div><div className="indicator-grid"><Metric label="Peso registrado" value={`${number((weighed.length / animals.length) * 100)}%`} detail={`${weighed.length} de ${animals.length} animais`} /><Metric label="Classificados" value={`${animals.filter((animal) => animal.categoria).length}`} detail="Com categoria definida" /><Metric label="Valor médio" value={money(totalValue / (animals.length || 1))} detail="Por animal" /></div></section>
-    <section className="charts"><div className="panel chart"><h2>Raças</h2><Bar data={chartData(distributions.raca || [], 'Animais por raça')} options={{ ...chartOptions, plugins: { legend: { display: false } } }} /></div><div className="panel chart"><h2>Categorias</h2><Doughnut data={chartData(distributions.categoria || [], 'Distribuição por categoria')} options={chartOptions} /></div><div className="panel sex-card"><h2>Composição por sexo</h2>{(distributions.sexo || []).map((item) => <div className="sex-row" key={item.nome}><span>{item.nome}</span><strong>{number((Number(item.quantidade) / (sexTotal || 1)) * 100)}%</strong><small>{item.quantidade} animais</small></div>)}</div></section>
-    <section className="panel chart wide-chart"><h2>Evolução de peso do lote</h2>{trend.length ? <Line data={{ labels: trend.map((item) => item.x), datasets: [{ label: 'Peso médio (kg)', data: trend.map((item) => item.y), borderColor: '#176b4d', backgroundColor: 'rgba(23, 107, 77, 0.12)', fill: true, tension: 0.35 }] }} options={chartOptions} /> : <p className="muted">Selecione um lote com histórico de pesagens para visualizar a evolução.</p>}</section>
-    <section className="panel table-panel">
-      <div className="section-heading"><div><span className="eyebrow">REBANHO</span><h2>Animais do lote</h2></div><span>{animals.length} registros</span></div>
-      <div className="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Brinco</th>
-              <th>Raça</th>
-              <th>Sexo</th>
-              <th>Idade</th>
-              <th>Categoria</th>
-              <th>Peso atual</th>
-              <th>Cria / Vínculo</th>
-              <th>Cotação / @</th>
-              <th>Valor estimado</th>
-            </tr>
-          </thead>
-          <tbody>
-            {animals.map((animal) => (
-              <tr key={animal.id}>
-                <td><b>{animal.id_brinco}</b></td>
-                <td>{animal.raca}</td>
-                <td>{animal.sexo}</td>
-                <td>{animal.idade_meses ?? '—'} meses</td>
-                <td><span className="tag">{animal.categoria || 'Sem categoria'}</span></td>
-                <td>{animal.peso_atual_kg != null ? `${number(animal.peso_atual_kg)} kg` : '—'}</td>
-                <td>
-                  {animal.cria_ao_pe ? (
-                    <span className="cria-tag" title={`Cria: Brinco ${animal.cria_ao_pe.id_brinco}`}>🍼 Cria: {animal.cria_ao_pe.id_brinco}</span>
-                  ) : animal.mae_brinco ? (
-                    <span className="mae-tag" title={`Mãe: Brinco ${animal.mae_brinco}`}>🐮 Mãe: {animal.mae_brinco}</span>
-                  ) : (
-                    '—'
-                  )}
-                </td>
-                <td>{money(animal.preco_arroba_aplicado)}</td>
-                <td><strong>{money(animal.valor_estimado)}</strong></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  </div>;
-}
-
-function Operations(props) {
-  const {
-    lotes,
-    animals,
-    loteForm,
-    setLoteForm,
-    animalForm,
-    setAnimalForm,
-    weightForm,
-    setWeightForm,
-    transferForm,
-    setTransferForm,
-    vincularCriaForm,
-    setVincularCriaForm,
-    submitLote,
-    submitAnimal,
-    submitWeight,
-    submitTransfer,
-    submitVincularCria,
-    hardwareStatus,
-    hardwareBusy,
-    configureHardware,
-    autoWeigh,
-    cotacaoForm,
-    setCotacaoForm,
-    submitCotacao,
-    syncMarketPrice,
-    syncingCotacao,
-    currentCotacao
-  } = props;
-  const update = (setter, field) => (event) => setter((current) => ({ ...current, [field]: event.target.value }));
-
-  const vacas = animals.filter((a) => a.sexo === 'femea');
-  const bezerrada = animals.filter((a) => a.idade_meses == null || a.idade_meses <= 12 || a.categoria?.includes('Bezer'));
-
-  return <section className="operations">
-    <div className="section-heading"><div><span className="eyebrow">OPERAÇÃO</span><h2>Cadastros e manejo</h2></div><p>Registre as movimentações sem sair do painel.</p></div>
-    <div className="operation-grid">
-      <form className="operation-card" onSubmit={submitLote}>
-        <h3>Novo lote</h3>
-        <Field label="Nome do lote"><input required value={loteForm.nome} onChange={update(setLoteForm, 'nome')} placeholder="Ex.: Confinamento C" /></Field>
-        <Field label="Descrição"><input value={loteForm.descricao} onChange={update(setLoteForm, 'descricao')} placeholder="Ex.: Novilhas em recria" /></Field>
-        <button className="primary">Salvar lote</button>
-      </form>
-
-      <form className="operation-card" onSubmit={submitAnimal}>
-        <h3>Novo animal</h3>
-        <div className="compact-fields">
-          <Field label="Brinco"><input required value={animalForm.id_brinco} onChange={update(setAnimalForm, 'id_brinco')} /></Field>
-          <Field label="Raça"><input required value={animalForm.raca} onChange={update(setAnimalForm, 'raca')} /></Field>
-          <Field label="Sexo"><select value={animalForm.sexo} onChange={update(setAnimalForm, 'sexo')}><option value="macho">Macho</option><option value="femea">Fêmea</option></select></Field>
-          <Field label="Lote"><select required value={animalForm.lote_id} onChange={update(setAnimalForm, 'lote_id')}>{lotes.length === 0 ? <option value="">Cadastre um lote primeiro</option> : lotes.map((lote) => <option key={lote.id} value={lote.id}>{lote.nome}</option>)}</select></Field>
-          <Field label="Data de nascimento"><input required type="date" value={animalForm.data_nascimento} onChange={update(setAnimalForm, 'data_nascimento')} /></Field>
-          <Field label="Data de entrada"><input required type="date" value={animalForm.data_entrada} onChange={update(setAnimalForm, 'data_entrada')} /></Field>
-          <Field label="Condição reprodutiva"><select value={animalForm.condicao_reprodutiva} onChange={update(setAnimalForm, 'condicao_reprodutiva')}><option value="">Não informar</option><option value="inteiro">Inteiro</option><option value="castrado">Castrado</option><option value="vazia">Vazia</option><option value="prenha">Prenha</option><option value="com_cria_ao_pe">Com cria ao pé</option></select></Field>
-          <Field label="Vaca mãe (se for cria)"><select value={animalForm.mae_id} onChange={update(setAnimalForm, 'mae_id')}><option value="">Nenhuma / Sem mãe</option>{vacas.map((vaca) => <option key={vaca.id} value={vaca.id}>{vaca.id_brinco} · {vaca.raca}</option>)}</select></Field>
-          <Field label="Peso inicial (kg)"><input type="number" min="50" max="2000" step="0.1" value={animalForm.peso_kg} onChange={update(setAnimalForm, 'peso_kg')} /></Field>
-        </div>
-        <button className="primary">Salvar animal</button>
-      </form>
-
-      <form className="operation-card" onSubmit={submitVincularCria}>
-        <h3>🍼 Vincular Cria à Vaca</h3>
-        <p>Associe uma vaca com cria ao pé com o bezerro(a) correspondente no lote.</p>
-        <Field label="Vaca (Mãe)"><select required value={vincularCriaForm.mae_id} onChange={update(setVincularCriaForm, 'mae_id')}>{vacas.length === 0 ? <option value="">Nenhuma fêmea no lote</option> : vacas.map((vaca) => <option key={vaca.id} value={vaca.id}>{vaca.id_brinco} · {vaca.raca}</option>)}</select></Field>
-        <Field label="Bezerro(a) (Cria)"><select required value={vincularCriaForm.cria_id} onChange={update(setVincularCriaForm, 'cria_id')}>{bezerrada.length === 0 ? <option value="">Nenhuma cria disponível</option> : bezerrada.map((cria) => <option key={cria.id} value={cria.id}>{cria.id_brinco} · {cria.raca} ({cria.sexo})</option>)}</select></Field>
-        <button className="primary">Vincular Par Mãe-Cria</button>
-      </form>
-
-      <form className="operation-card" onSubmit={submitWeight}>
-        <h3>Pesagem manual</h3>
-        <Field label="Animal"><select required value={weightForm.animal_id} onChange={update(setWeightForm, 'animal_id')}>{animals.length === 0 ? <option value="">Nenhum animal no lote</option> : animals.map((animal) => <option key={animal.id} value={animal.id}>{animal.id_brinco} · {animal.raca}</option>)}</select></Field>
-        <Field label="Peso (kg)"><input required type="number" min="0.1" step="0.1" value={weightForm.peso_kg} onChange={update(setWeightForm, 'peso_kg')} /></Field>
-        <Field label="Data"><input required type="date" value={weightForm.data_pesagem} onChange={update(setWeightForm, 'data_pesagem')} /></Field>
-        <button className="primary">Registrar peso</button>
-      </form>
-
-      <form className="operation-card" onSubmit={submitTransfer}>
-        <h3>Transferir animal</h3>
-        <Field label="Animal"><select required value={transferForm.animal_id} onChange={update(setTransferForm, 'animal_id')}>{animals.length === 0 ? <option value="">Nenhum animal disponível</option> : animals.map((animal) => <option key={animal.id} value={animal.id}>{animal.id_brinco} · {animal.raca}</option>)}</select></Field>
-        <Field label="Novo lote"><select required value={transferForm.lote_id} onChange={update(setTransferForm, 'lote_id')}>{lotes.length === 0 ? <option value="">Nenhum lote cadastrado</option> : lotes.map((lote) => <option key={lote.id} value={lote.id}>{lote.nome}</option>)}</select></Field>
-        <button className="secondary">Transferir</button>
-      </form>
-
-      <article className="operation-card">
-        <h3>Cotação de mercado (@)</h3>
-        <p>Boi Gordo CEPEA: <strong>{currentCotacao?.preco ? money(currentCotacao.preco) : '—'}</strong></p>
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-          <button type="button" className="primary" disabled={syncingCotacao} onClick={syncMarketPrice}>
-            {syncingCotacao ? 'Consultando mercado...' : 'Sincronizar Mercado ao Vivo'}
-          </button>
-        </div>
-        <form onSubmit={submitCotacao}>
-          <Field label="Categoria da Cotação">
-            <select value={cotacaoForm.categoria} onChange={update(setCotacaoForm, 'categoria')}>
-              <option value="Boi gordo">Boi gordo (Padrão)</option>
-              <option value="Vaca gorda">Vaca gorda</option>
-              <option value="Vaca">Vaca</option>
-              <option value="Novilha">Novilha</option>
-              <option value="Novilho">Novilho</option>
-              <option value="Bezerro">Bezerro</option>
-              <option value="Bezerra">Bezerra</option>
-              <option value="Garrote">Garrote</option>
-              <option value="Touro">Touro</option>
-            </select>
-          </Field>
-          <Field label="Definir preço manual (R$/@)">
-            <input required type="number" min="1" step="0.01" value={cotacaoForm.preco} onChange={update(setCotacaoForm, 'preco')} placeholder="Ex.: 345.50" />
-          </Field>
-          <button className="secondary">Salvar cotação da categoria</button>
-        </form>
-      </article>
-
-      <article className="operation-card hardware">
-        <h3>Pesagem automática</h3>
-        <p>Use a câmera para identificar o brinco e a balança conectada para registrar o peso estável.</p>
-        <div className="hardware-status">{hardwareStatus}</div>
-        <button className="secondary" disabled={hardwareBusy} onClick={configureHardware}>Configurar hardware</button>
-        <button className="primary" disabled={hardwareBusy} onClick={autoWeigh}>{hardwareBusy ? 'Processando...' : 'Iniciar pesagem'}</button>
-      </article>
-    </div>
-  </section>;
 }
