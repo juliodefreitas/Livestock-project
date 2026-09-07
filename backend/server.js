@@ -25,9 +25,9 @@ if (process.argv.includes('--seed')) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configurar CORS seguro
+// Configurar CORS
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : true,
   credentials: true
 };
 
