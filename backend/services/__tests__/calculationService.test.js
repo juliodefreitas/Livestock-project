@@ -29,9 +29,17 @@ test('kgParaArrobas converte valores válidos e trata entradas inválidas', () =
   assert.equal(kgParaArrobas(-5), null);
 });
 
-test('calcularValorEstimado arredonda o valor estimado', () => {
-  assert.equal(calcularValorEstimado(2.6667, 285.5), 761.34);
-  assert.equal(calcularValorEstimado(null, 285.5), null);
+test('calcularValorEstimado arredonda o valor estimado por arroba', () => {
+  assert.equal(calcularValorEstimado(2.6667, 285.5, 'Boi gordo'), 761.34);
+  assert.equal(calcularValorEstimado(null, 285.5, 'Boi gordo'), null);
+});
+
+test('calcularValorEstimado calcula por cabeça para Bezerro e Bezerra', () => {
+  // Bezerro com 5 arrobas ou sem pesagem: o valor deve ser o preço da cabeça
+  assert.equal(calcularValorEstimado(5, 2450.0, 'Bezerro'), 2450.0);
+  assert.equal(calcularValorEstimado(null, 2450.0, 'Bezerro'), 2450.0);
+  assert.equal(calcularValorEstimado(4.5, 2150.0, 'Bezerra'), 2150.0);
+  assert.equal(calcularValorEstimado(null, 2150.0, 'Bezerra'), 2150.0);
 });
 
 test('podeVenderMatadouro retorna false para fêmeas com menos de 14 arrobas', () => {

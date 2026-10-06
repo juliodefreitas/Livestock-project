@@ -16,10 +16,11 @@ const { requireAuth } = require('./middleware/auth');
 
 runMigrations();
 
-if (process.argv.includes('--seed')) {
+// Garante que o banco contenha a fazenda demo e dados iniciais se estiver vazio
+try {
   seed();
-} else {
-  console.log('Seed não executado. Use "npm run seed" para popular o banco com dados de exemplo.');
+} catch (err) {
+  console.warn('Nota sobre inicialização do seed:', err.message);
 }
 
 const app = express();

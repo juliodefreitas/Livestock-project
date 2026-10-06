@@ -538,20 +538,24 @@ export default function App() {
                 <div className="panel-header">
                   <div>
                     <span className="tag-pill green">Mercado ao Vivo</span>
-                    <h3>Cotações por Categoria (@)</h3>
+                    <h3>Cotações por Categoria (Arroba & Cabeça)</h3>
                   </div>
                   <button className="btn-mini" onClick={syncMarketPrice} disabled={syncingCotacao}>
                     {syncingCotacao ? 'Atualizando...' : '🔄 Sincronizar Mercado'}
                   </button>
                 </div>
                 <div className="live-market-grid">
-                  {Object.entries(data.cotacao.categorias).map(([catNome, catInfo]) => (
-                    <div className="market-card" key={catNome}>
-                      <span className="market-cat-title">{catNome}</span>
-                      <strong className="market-cat-price">{money(catInfo.preco)}</strong>
-                      <small className="market-cat-source" title={catInfo.fonte}>{catInfo.fonte}</small>
-                    </div>
-                  ))}
+                  {Object.entries(data.cotacao.categorias).map(([catNome, catInfo]) => {
+                    const isCab = catInfo.unidade === 'cab' || catNome === 'Bezerro' || catNome === 'Bezerra';
+                    return (
+                      <div className="market-card" key={catNome}>
+                        <span className="market-cat-title">{catNome}</span>
+                        <strong className="market-cat-price">{money(catInfo.preco)}</strong>
+                        <span className="market-cat-unit">{isCab ? '/ cabeça (animal)' : '/ arroba (@)'}</span>
+                        <small className="market-cat-source" title={catInfo.fonte}>{catInfo.fonte}</small>
+                      </div>
+                    );
+                  })}
                 </div>
               </section>
             )}
@@ -680,7 +684,17 @@ export default function App() {
                               <span className="text-muted">—</span>
                             )}
                           </td>
-                          <td>{money(animal.preco_arroba_aplicado)} /@</td>
+                          <td>
+                            {animal.unidade_cotacao === 'cab' || animal.categoria === 'Bezerro' || animal.categoria === 'Bezerra' ? (
+                              <span className="unit-badge cabeca">
+                                {money(animal.preco_unitario_aplicado || animal.preco_arroba_aplicado)} / cab
+                              </span>
+                            ) : (
+                              <span className="unit-badge arroba">
+                                {money(animal.preco_arroba_aplicado || animal.preco_unitario_aplicado)} / @
+                              </span>
+                            )}
+                          </td>
                           <td><strong className="price-value">{money(animal.valor_estimado)}</strong></td>
                         </tr>
                       ))
@@ -779,7 +793,7 @@ export default function App() {
                 <div className="card-head">
                   <span className="card-icon">💹</span>
                   <div>
-                    <h3>Mercado e Precificação da Arroba</h3>
+                    <h3>Mercado e Precificação Pecuária</h3>
                     <p>Sincronize com os principais indicadores ou ajuste preços locais para sua fazenda.</p>
                   </div>
                 </div>
@@ -787,7 +801,7 @@ export default function App() {
                 <div className="sync-banner">
                   <div>
                     <strong>Referência Atual: {data?.cotacao?.fonte || 'CEPEA/Esalq'}</strong>
-                    <p>Boi Gordo padrão: <span>{data?.cotacao?.preco ? money(data.cotacao.preco) : '—'}</span></p>
+                    <p>Boi Gordo padrão: <span>{data?.cotacao?.preco ? `${money(data.cotacao.preco)} / @` : '—'}</span></p>
                   </div>
                   <button className="btn-primary" disabled={syncingCotacao} onClick={syncMarketPrice}>
                     {syncingCotacao ? 'Buscando cotações...' : '🔄 Sincronizar Mercado Agora'}
@@ -795,40 +809,66 @@ export default function App() {
                 </div>
 
                 <div className="cotacoes-cards-full">
-                  {data?.cotacao?.categorias && Object.entries(data.cotacao.categorias).map(([catNome, catInfo]) => (
-                    <div className="cat-price-row" key={catNome}>
-                      <div className="cat-price-info">
-                        <strong>{catNome}</strong>
-                        <small>{catInfo.fonte}</small>
+                  {data?.cotacao?.categorias && Object.entries(data.cotacao.categorias).map(([catNome, catInfo]) => {
+                    const isCab = catInfo.unidade === 'cab' || catNome === 'Bezerro' || catNome === 'Bezerra';
+                    return (
+                      <div className="cat-price-row" key={catNome}>
+                        <div className="cat-price-info">
+                          <strong>{catNome}</strong>
+                          <small>{catInfo.fonte}</small>
+                        </div>
+                        <div className="cat-price-val">
+                          <span>{money(catInfo.preco)}</span>
+                          <small>{isCab ? '/ cabeça (animal)' : '/ arroba (@)'}</small>
+                        </div>
                       </div>
-                      <div className="cat-price-val">
-                        <span>{money(catInfo.preco)}</span>
-                        <small>/ arroba (@)</small>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
               <div className="panel cotacao-form-card">
                 <h3>Definir Cotação Manual</h3>
-                <p>Personalize o valor da arroba para uma categoria específica praticada na sua região.</p>
+                <p>Personalize o valor da arroba ou por animal para uma categoria específica praticada na sua região.</p>
                 <form onSubmit={submitCotacao}>
                   <Field label="Categoria de Gado">
                     <select value={cotacaoForm.categoria} onChange={(e) => setCotacaoForm({ ...cotacaoForm, categoria: e.target.value })}>
-                      <option value="Boi gordo">Boi gordo</option>
-                      <option value="Vaca gorda">Vaca gorda</option>
-                      <option value="Vaca">Vaca</option>
-                      <option value="Novilha">Novilha</option>
-                      <option value="Novilho">Novilho</option>
-                      <option value="Bezerro">Bezerro</option>
-                      <option value="Bezerra">Bezerra</option>
-                      <option value="Garrote">Garrote</option>
-                      <option value="Touro">Touro</option>
+                      <option value="Boi gordo">Boi gordo (R$/@)</option>
+                      <option value="Vaca gorda">Vaca gorda (R$/@)</option>
+                      <option value="Vaca">Vaca (R$/@)</option>
+                      <option value="Novilha">Novilha (R$/@)</option>
+                      <option value="Novilho">Novilho (R$/@)</option>
+                      <option value="Bezerro">Bezerro (R$/cabeça)</option>
+                      <option value="Bezerra">Bezerra (R$/cabeça)</option>
+                      <option value="Garrote">Garrote (R$/@)</option>
+                      <option value="Touro">Touro (R$/@)</option>
                     </select>
                   </Field>
-                  <Field label="Preço da Arroba (R$/@)">
-                    <input required type="number" min="1" step="0.01" value={cotacaoForm.preco} onChange={(e) => setCotacaoForm({ ...cotacaoForm, preco: e.target.value })} placeholder="Ex: 340.00" />
+                  <Field
+                    label={
+                      cotacaoForm.categoria === 'Bezerro' || cotacaoForm.categoria === 'Bezerra'
+                        ? 'Preço por Cabeça / Animal (R$/cab)'
+                        : 'Preço da Arroba (R$/@)'
+                    }
+                    hint={
+                      cotacaoForm.categoria === 'Bezerro' || cotacaoForm.categoria === 'Bezerra'
+                        ? 'Valor nominal praticado por bezerro no desmame/recria'
+                        : 'Valor da arroba de peso vivo'
+                    }
+                  >
+                    <input
+                      required
+                      type="number"
+                      min="1"
+                      step="0.01"
+                      value={cotacaoForm.preco}
+                      onChange={(e) => setCotacaoForm({ ...cotacaoForm, preco: e.target.value })}
+                      placeholder={
+                        cotacaoForm.categoria === 'Bezerro' || cotacaoForm.categoria === 'Bezerra'
+                          ? 'Ex: 2450.00'
+                          : 'Ex: 340.00'
+                      }
+                    />
                   </Field>
                   <button className="btn-primary full">Salvar Cotação da Categoria</button>
                 </form>

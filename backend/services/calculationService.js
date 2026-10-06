@@ -1,5 +1,12 @@
 const ARROBA_KG = 15;
 
+const CATEGORIAS_POR_CABECA = new Set(['Bezerro', 'Bezerra']);
+
+function isCotacaoPorCabeca(categoria) {
+  if (!categoria) return false;
+  return CATEGORIAS_POR_CABECA.has(categoria);
+}
+
 function kgParaArrobas(pesoKg) {
   if (pesoKg == null || pesoKg <= 0) return null;
   return Math.round((pesoKg / ARROBA_KG) * 100) / 100;
@@ -27,9 +34,17 @@ function calcularIdadeMeses(dataNascimento, idadeEstimadaMeses, dataReferencia =
   return idadeEstimadaMeses ?? null;
 }
 
-function calcularValorEstimado(pesoArrobas, precoArroba) {
-  if (pesoArrobas == null || precoArroba == null) return null;
-  return Math.round(pesoArrobas * precoArroba * 100) / 100;
+function calcularValorEstimado(pesoArrobas, precoUnitario, categoria = null) {
+  if (precoUnitario == null || precoUnitario <= 0) return null;
+
+  // Cotação por cabeça (animal): o valor estimado é diretamente o preço da unidade
+  if (isCotacaoPorCabeca(categoria)) {
+    return Math.round(precoUnitario * 100) / 100;
+  }
+
+  // Cotação por arroba: depende do peso em arrobas
+  if (pesoArrobas == null || pesoArrobas <= 0) return null;
+  return Math.round(pesoArrobas * precoUnitario * 100) / 100;
 }
 
 function calcularGMD(pesagens) {
@@ -53,13 +68,17 @@ function precoPorCategoria(cotacao, categoria) {
   if (cotacao?.categorias && categoria && cotacao.categorias[categoria]?.preco) {
     return cotacao.categorias[categoria].preco;
   }
+  if (isCotacaoPorCabeca(categoria)) {
+    return categoria === 'Bezerro' ? 2450.0 : 2150.0;
+  }
   return cotacao?.preco || 340.0;
 }
 
-function enriquecerAnimal(animal, ultimaPesagem, precoArroba, categoria, extras = {}) {
+function enriquecerAnimal(animal, ultimaPesagem, precoUnitario, categoria, extras = {}) {
   const idadeMeses = calcularIdadeMeses(animal.data_nascimento, animal.idade_estimada_meses);
   const pesoKg = ultimaPesagem?.peso_kg ?? null;
   const pesoArrobas = kgParaArrobas(pesoKg);
+  const porCabeca = isCotacaoPorCabeca(categoria);
 
   return {
     ...animal,
@@ -67,8 +86,10 @@ function enriquecerAnimal(animal, ultimaPesagem, precoArroba, categoria, extras 
     peso_atual_kg: pesoKg,
     peso_atual_arrobas: pesoArrobas,
     pode_vender_matadouro: podeVenderMatadouro(animal.sexo, pesoArrobas),
-    preco_arroba_aplicado: precoArroba,
-    valor_estimado: calcularValorEstimado(pesoArrobas, precoArroba),
+    preco_arroba_aplicado: porCabeca ? null : precoUnitario,
+    preco_unitario_aplicado: precoUnitario,
+    unidade_cotacao: porCabeca ? 'cab' : '@',
+    valor_estimado: calcularValorEstimado(pesoArrobas, precoUnitario, categoria),
     categoria: categoria ?? null,
     ultima_pesagem: ultimaPesagem?.data_pesagem ?? null,
     ...extras,
@@ -77,6 +98,8 @@ function enriquecerAnimal(animal, ultimaPesagem, precoArroba, categoria, extras 
 
 module.exports = {
   ARROBA_KG,
+  CATEGORIAS_POR_CABECA,
+  isCotacaoPorCabeca,
   kgParaArrobas,
   calcularIdadeMeses,
   calcularValorEstimado,

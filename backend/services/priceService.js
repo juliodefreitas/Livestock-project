@@ -35,23 +35,35 @@ function calcularCategoriasDerivadas(precoBoiGordo, dataRef, fonteBase, custom =
   const precoBase = Number(precoBoiGordo) || 340;
   const precoVaca = custom.vaca_gorda ? Number(custom.vaca_gorda) : Math.round(precoBase * 0.90 * 100) / 100; // ~90% do boi gordo
   const precoNovilha = Math.round(precoBase * 0.93 * 100) / 100; // ~93%
-  const precoBezerro = custom.bezerro ? Number(custom.bezerro) : Math.round(precoBase * 1.18 * 100) / 100; // ~118% (ágio bezerro)
-  const precoBezerra = Math.round(precoBezerro * 0.92 * 100) / 100;
   const precoGarrote = Math.round(precoBase * 1.05 * 100) / 100;
   const precoNovilho = Math.round(precoBase * 0.98 * 100) / 100;
   const precoTouro = Math.round(precoBase * 0.85 * 100) / 100;
 
+  // Preço por cabeça (R$/cab) para reposição (Bezerro e Bezerra)
+  // Caso a API retorne um valor nominal de bezerro (ex: ~2450) ou derivamos da relação de troca padrão
+  let precoBezerroCabeca = 2450.0;
+  if (custom.bezerro && Number(custom.bezerro) > 500) {
+    precoBezerroCabeca = Number(custom.bezerro);
+  } else if (custom.bezerro && Number(custom.bezerro) <= 500) {
+    // Se a fonte externa enviou em arroba (~7@ por bezerro)
+    precoBezerroCabeca = Math.round(Number(custom.bezerro) * 7.5 * 100) / 100;
+  } else {
+    // Estimativa de reposição (~7.2 arrobas de boi gordo por bezerro desmamado)
+    precoBezerroCabeca = Math.round(precoBase * 7.2 * 100) / 100;
+  }
+  const precoBezerraCabeca = Math.round(precoBezerroCabeca * 0.88 * 100) / 100;
+
   return {
-    'Boi gordo': { preco: precoBase, fonte: fonteBase, data_referencia: dataRef },
-    'Boi': { preco: precoBase, fonte: fonteBase, data_referencia: dataRef },
-    'Vaca gorda': { preco: precoVaca, fonte: custom.vaca_gorda ? `${fonteBase} (Vaca Gorda)` : `${fonteBase} (Estimado)`, data_referencia: dataRef },
-    'Vaca': { preco: precoVaca, fonte: custom.vaca_gorda ? `${fonteBase} (Vaca Gorda)` : `${fonteBase} (Estimado)`, data_referencia: dataRef },
-    'Novilha': { preco: precoNovilha, fonte: `${fonteBase} (Estimado)`, data_referencia: dataRef },
-    'Novilho': { preco: precoNovilho, fonte: `${fonteBase} (Estimado)`, data_referencia: dataRef },
-    'Bezerro': { preco: precoBezerro, fonte: custom.bezerro ? `${fonteBase} (Bezerro)` : `${fonteBase} (Estimado)`, data_referencia: dataRef },
-    'Bezerra': { preco: precoBezerra, fonte: `${fonteBase} (Estimado)`, data_referencia: dataRef },
-    'Garrote': { preco: precoGarrote, fonte: `${fonteBase} (Estimado)`, data_referencia: dataRef },
-    'Touro': { preco: precoTouro, fonte: `${fonteBase} (Estimado)`, data_referencia: dataRef },
+    'Boi gordo': { preco: precoBase, unidade: '@', fonte: fonteBase, data_referencia: dataRef },
+    'Boi': { preco: precoBase, unidade: '@', fonte: fonteBase, data_referencia: dataRef },
+    'Vaca gorda': { preco: precoVaca, unidade: '@', fonte: custom.vaca_gorda ? `${fonteBase} (Vaca Gorda)` : `${fonteBase} (Estimado)`, data_referencia: dataRef },
+    'Vaca': { preco: precoVaca, unidade: '@', fonte: custom.vaca_gorda ? `${fonteBase} (Vaca Gorda)` : `${fonteBase} (Estimado)`, data_referencia: dataRef },
+    'Novilha': { preco: precoNovilha, unidade: '@', fonte: `${fonteBase} (Estimado)`, data_referencia: dataRef },
+    'Novilho': { preco: precoNovilho, unidade: '@', fonte: `${fonteBase} (Estimado)`, data_referencia: dataRef },
+    'Bezerro': { preco: precoBezerroCabeca, unidade: 'cab', fonte: custom.bezerro ? `${fonteBase} (Reposição)` : `${fonteBase} (Média por cabeça)`, data_referencia: dataRef },
+    'Bezerra': { preco: precoBezerraCabeca, unidade: 'cab', fonte: `${fonteBase} (Média por cabeça)`, data_referencia: dataRef },
+    'Garrote': { preco: precoGarrote, unidade: '@', fonte: `${fonteBase} (Estimado)`, data_referencia: dataRef },
+    'Touro': { preco: precoTouro, unidade: '@', fonte: `${fonteBase} (Estimado)`, data_referencia: dataRef },
   };
 }
 
@@ -152,8 +164,10 @@ async function getPrecoArroba(fazendaId, forceRefresh = false) {
 
     const categorias = calcularCategoriasDerivadas(externo.preco, externo.data_referencia, externo.fonte, externo);
     for (const cat of dbCategorias) {
+      const isCabeca = cat.categoria === 'Bezerro' || cat.categoria === 'Bezerra';
       categorias[cat.categoria] = {
         preco: cat.preco,
+        unidade: isCabeca ? 'cab' : '@',
         fonte: cat.fonte,
         data_referencia: cat.data_referencia,
       };
@@ -175,8 +189,10 @@ async function getPrecoArroba(fazendaId, forceRefresh = false) {
   if (dbRow) {
     const categorias = calcularCategoriasDerivadas(dbRow.preco, dbRow.data_referencia, dbRow.fonte);
     for (const cat of dbCategorias) {
+      const isCabeca = cat.categoria === 'Bezerro' || cat.categoria === 'Bezerra';
       categorias[cat.categoria] = {
         preco: cat.preco,
+        unidade: isCabeca ? 'cab' : '@',
         fonte: cat.fonte,
         data_referencia: cat.data_referencia,
       };
